@@ -70,19 +70,26 @@ export default async function handler(req, res) {
   // Check if ticket was already marked as checked-in in the store
   const previousScan = store.checkedInTickets.get(rawInput) || store.checkedInTickets.get(queryUpper);
 
+  const digitsOnly = queryUpper.replace(/[^0-9]/g, '');
+
   let matched = null;
   for (const r of store.registrations.values()) {
     const tid = (r.ticketId || '').toUpperCase();
     const qv = (r.qrValue || '').toUpperCase();
     const rid = (r.id || '').toUpperCase();
+    const tDigits = tid.replace(/[^0-9]/g, '');
 
     if (
       (tid && tid === queryUpper) ||
       (qv && qv === queryUpper) ||
       (rid && rid === queryUpper) ||
+      (tid && tid.includes(queryUpper)) ||
       (tid && queryUpper.includes(tid)) ||
+      (qv && qv.includes(queryUpper)) ||
       (qv && queryUpper.includes(qv)) ||
-      (rid && queryUpper.includes(rid))
+      (rid && queryUpper.includes(rid)) ||
+      (rid && rid.includes(queryUpper)) ||
+      (digitsOnly && digitsOnly.length >= 4 && tDigits.endsWith(digitsOnly))
     ) {
       matched = r;
       break;

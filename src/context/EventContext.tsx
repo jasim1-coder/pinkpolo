@@ -275,10 +275,17 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             const qv = (r.qrValue || '').toUpperCase();
             const rid = (r.id || '').toUpperCase();
 
-            const isCloudScanned =
-              (tid && cloudScanned.includes(tid)) ||
-              (rid && cloudScanned.includes(rid)) ||
-              (qv && cloudScanned.some((s: string) => qv.includes(s)));
+            const tDigits = tid.replace(/[^0-9]/g, '');
+
+            const isCloudScanned = cloudScanned.some((s: string) => {
+              const sDigits = s.replace(/[^0-9]/g, '');
+              return (
+                (tid && (tid === s || tid.includes(s) || s.includes(tid))) ||
+                (rid && (rid === s || rid.includes(s) || s.includes(rid))) ||
+                (qv && (qv === s || qv.includes(s) || s.includes(qv))) ||
+                (sDigits && sDigits.length >= 4 && tDigits.endsWith(sDigits))
+              );
+            });
 
             const isSyncScanned =
               (r.ticketId && syncCheckedMap[r.ticketId]) ||
