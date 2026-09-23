@@ -157,30 +157,6 @@ export default async function handler(req, res) {
 
   const scannedKey = matched.ticketId || rawInput;
 
-  // Persist to Cloud Store so all browser dashboards instantly see it
-  try {
-    const cloudUrl = 'https://api.restful-api.dev/objects/ff808181a09d98f701a0ce7afc597be9';
-    fetch(cloudUrl)
-      .then((r) => r.json())
-      .then((current) => {
-        const existing = Array.isArray(current?.data?.scannedTickets) ? current.data.scannedTickets : [];
-        if (!existing.includes(scannedKey)) {
-          existing.push(scannedKey);
-          if (matched.ticketId && !existing.includes(matched.ticketId)) existing.push(matched.ticketId);
-          if (rawInput && !existing.includes(rawInput)) existing.push(rawInput);
-          fetch(cloudUrl, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: 'pink_polo_live_checkins',
-              data: { scannedTickets: existing },
-            }),
-          }).catch(() => {});
-        }
-      })
-      .catch(() => {});
-  } catch (e) {}
-
   // Store in scanned tickets lookup by ticket ID, qr value, and ID
   const scanData = {
     ticketId: matched.ticketId || rawInput,

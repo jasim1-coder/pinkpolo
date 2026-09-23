@@ -154,12 +154,14 @@ export const checkInAttendeeInFirestore = async (
     const snapshot = await getDocs(colRef);
     let matchedDocId: string | null = null;
     let matchedAttendee: Registration | null = null;
+    const digitsOnly = queryUpper.replace(/[^0-9]/g, '');
 
     snapshot.forEach((docSnap) => {
       const r = docSnap.data() as Registration;
       const tid = (r.ticketId || '').toUpperCase();
       const qv = (r.qrValue || '').toUpperCase();
       const rid = (r.id || '').toUpperCase();
+      const tDigits = tid.replace(/[^0-9]/g, '');
 
       if (
         (tid && tid === queryUpper) ||
@@ -167,7 +169,11 @@ export const checkInAttendeeInFirestore = async (
         (rid && rid === queryUpper) ||
         (tid && queryUpper.includes(tid)) ||
         (qv && queryUpper.includes(qv)) ||
-        (rid && queryUpper.includes(rid))
+        (rid && queryUpper.includes(rid)) ||
+        (tid && tid.includes(queryUpper)) ||
+        (rid && rid.includes(queryUpper)) ||
+        (digitsOnly && digitsOnly.length >= 4 && tDigits.endsWith(digitsOnly)) ||
+        (digitsOnly && digitsOnly.length >= 4 && tDigits.includes(digitsOnly))
       ) {
         matchedDocId = docSnap.id;
         matchedAttendee = r;
@@ -178,7 +184,7 @@ export const checkInAttendeeInFirestore = async (
       return {
         success: false,
         status: 'invalid',
-        message: `Invalid Pass: Barcode "${rawInput}" is not recognized in the guest database.`,
+        message: `Invalid Pass: Barcode "${rawInput}" is not recognized in the database.`,
       };
     }
 
@@ -202,7 +208,7 @@ export const checkInAttendeeInFirestore = async (
       };
     }
 
-    // Mark as Checked In
+    // Mark as Checked In directly in Firestore
     const updatedAttendee: Registration = {
       ...attendee,
       checkedIn: true,
@@ -214,7 +220,7 @@ export const checkInAttendeeInFirestore = async (
       checkedInAt: nowIso,
     });
 
-    // Log Activity
+    // Log Activity to Firestore
     const activity: ActivityItem = {
       id: `ACT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       type: 'checkin',

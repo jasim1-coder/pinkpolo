@@ -118,15 +118,10 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }, 4500);
   }, []);
 
-  // Sync to localStorage and backend server
+  // Sync to localStorage for offline cache
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(registrations));
-      fetch('/api/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updatedRegistrations: registrations }),
-      }).catch(() => {});
     } catch (e) {
       console.error(e);
     }
@@ -143,11 +138,6 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.STATS, JSON.stringify(stats));
-      fetch('/api/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updatedStats: stats }),
-      }).catch(() => {});
     } catch (e) {
       console.error(e);
     }
@@ -161,82 +151,58 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, [autoSimulateEnabled]);
 
-  // Real-time Cloud Firebase Firestore Listener for External Scanner API
+  // Real-time Cloud Firebase Firestore Listener
   useEffect(() => {
-    // Populate baseline checked-in IDs
+    // Populate baseline checked-in IDs to detect new check-ins
     registrations.forEach((r) => {
       if (r.checkedIn) initialCheckedInIdsRef.current.add(r.id);
     });
 
-    const unsubscribeFirestore = subscribeToRegistrations((cloudList) => {
-      if (!cloudList || cloudList.length === 0) return;
+    const unsubscribeFirestore = subscribeToRegistrations(
+      (cloudList) => {
+        if (!cloudList || cloudList.length === 0) return;
 
-      setRegistrations((prev) => {
-        // Detect newly checked-in attendees from external scanner
+        // Detect newly checked-in attendees to show toast
         cloudList.forEach((cloudReg) => {
           if (cloudReg.checkedIn && !initialCheckedInIdsRef.current.has(cloudReg.id)) {
             initialCheckedInIdsRef.current.add(cloudReg.id);
             addToast(
               'success',
-              '📱 Live Scanner Check-In!',
+              '📱 Live Ticket Check-In!',
               `${cloudReg.name} (${cloudReg.tier}) verified at Gate turnstile`
             );
           }
         });
 
-        // Merge cloud list with local
-        const cloudMap = new Map<string, Registration>();
-        cloudList.forEach((r) => cloudMap.set(r.id, r));
+        setRegistrations(cloudList);
 
-        const updated = prev.map((local) => {
-          const remote = cloudMap.get(local.id);
-          if (remote) {
-            return {
-              ...local,
-              ...remote,
-              // Never downgrade a checked-in state
-              checkedIn: local.checkedIn || remote.checkedIn,
-              checkedInAt: remote.checkedInAt || local.checkedInAt,
-            };
-          }
-          return local;
-        });
+        // Calculate stats directly from Firestore data
+        const checkedCount = cloudList.filter((r) => r.checkedIn).length;
+        const approvedCount = cloudList.filter((r) => r.status === 'Approved').length;
+        const pendingCount = cloudList.filter((r) => r.status === 'Pending').length;
+        const rejectedCount = cloudList.filter((r) => r.status === 'Rejected').length;
 
-        // Add any new ones created in cloud
-        cloudList.forEach((r) => {
-          if (!prev.some((p) => p.id === r.id)) {
-            updated.push(r);
-          }
-        });
-
-        // Update stats
-        const checkedCount = updated.filter((r) => r.checkedIn).length;
-        const approvedCount = updated.filter((r) => r.status === 'Approved').length;
-        const pendingCount = updated.filter((r) => r.status === 'Pending').length;
-        const rejectedCount = updated.filter((r) => r.status === 'Rejected').length;
-
-        setStats((s) => ({
-          ...s,
+        setStats({
           checkedIn: checkedCount,
           approved: approvedCount,
           pendingApproval: pendingCount,
           rejected: rejectedCount,
-          totalRegistrations: updated.length,
+          totalRegistrations: cloudList.length,
           ticketsGenerated: approvedCount,
-        }));
+        });
 
-        return updated;
-      });
-    });
+        setIsServerConnected(true);
+      },
+      (err) => {
+        console.warn('Firebase connection issue, running in local mode:', err);
+        setIsServerConnected(false);
+      }
+    );
 
     // Real-time Activities subscription
     const unsubscribeActivities = subscribeToActivities((cloudActivities) => {
       if (cloudActivities && cloudActivities.length > 0) {
-        setActivities((prev) => {
-          const existingIds = new Set(prev.map((a) => a.id));
-          const newActs = cloudActivities.filter((a) => !existingIds.has(a.id));
-          return [...newActs, ...prev].slice(0, 50);
-        });
+        setActivities(cloudActivities.slice(0, 50));
       }
     });
 
@@ -245,115 +211,6 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       unsubscribeActivities();
     };
   }, [addToast]);
-
-  // Active real-time sync with Vercel serverless /api/sync endpoint
-  useEffect(() => {
-    const pollSync = async () => {
-      try {
-        const res = await fetch('/api/sync');
-        if (!res.ok) return;
-        const syncData = await res.json();
-        const syncCheckedMap = syncData?.checkedInTickets || {};
-        const scannedKeys = Object.keys(syncCheckedMap).map((k) => k.toUpperCase());
-
-        if (scannedKeys.length === 0) return;
-
-        setRegistrations((prev) => {
-          let changed = false;
-          const updated = prev.map((r) => {
-            const tid = (r.ticketId || '').toUpperCase();
-            const qv = (r.qrValue || '').toUpperCase();
-            const rid = (r.id || '').toUpperCase();
-            const tDigits = tid.replace(/[^0-9]/g, '');
-
-            const isScanned = scannedKeys.some((s) => {
-              const sDigits = s.replace(/[^0-9]/g, '');
-              return (
-                (tid && (tid === s || tid.includes(s) || s.includes(tid))) ||
-                (rid && (rid === s || rid.includes(s) || s.includes(rid))) ||
-                (qv && (qv === s || qv.includes(s) || s.includes(qv))) ||
-                (sDigits && sDigits.length >= 4 && tDigits.endsWith(sDigits)) ||
-                (sDigits && sDigits.length >= 4 && tDigits.includes(sDigits))
-              );
-            });
-
-            if (isScanned && !r.checkedIn) {
-              changed = true;
-              addToast(
-                'success',
-                '📱 Live Scanner Check-In!',
-                `${r.name} (${r.tier}) verified at Gate turnstile`
-              );
-              return {
-                ...r,
-                checkedIn: true,
-                checkedInAt:
-                  syncCheckedMap[r.ticketId || '']?.checkedInAt ||
-                  new Date().toISOString().replace('T', ' ').substring(0, 16),
-              };
-            }
-            return r;
-          });
-
-          if (changed) {
-            const checkedCount = updated.filter((r) => r.checkedIn).length;
-            setStats((s) => ({ ...s, checkedIn: checkedCount }));
-            return updated;
-          }
-          return prev;
-        });
-      } catch (e) {
-        // silent retry
-      }
-    };
-
-    pollSync();
-    const interval = setInterval(pollSync, 2000);
-    return () => clearInterval(interval);
-  }, [addToast]);
-
-  // Initial load from server and SSE live stream listener
-  useEffect(() => {
-    fetch('/api/state')
-      .then((res) => {
-        const ct = res.headers.get('content-type');
-        if (res.ok && ct && ct.includes('application/json')) {
-          return res.json();
-        }
-        throw new Error('Server state API not active on static host');
-      })
-      .then((data) => {
-        setIsServerConnected(true);
-        if (data && Array.isArray(data.registrations)) {
-          setRegistrations((localRegs) => {
-            const localMap = new Map<string, Registration>();
-            localRegs.forEach((r) => localMap.set(r.id, r));
-
-            const serverMap = new Map<string, Registration>();
-            data.registrations.forEach((r: Registration) => {
-              const local = localMap.get(r.id);
-              const isCheckedIn = r.checkedIn || (local ? local.checkedIn : false);
-              const checkedInAt = r.checkedInAt || (local ? local.checkedInAt : undefined);
-              serverMap.set(r.id, {
-                ...r,
-                checkedIn: isCheckedIn,
-                checkedInAt: checkedInAt,
-              });
-            });
-
-            localRegs.forEach((r) => {
-              if (!serverMap.has(r.id)) {
-                serverMap.set(r.id, r);
-              }
-            });
-            return Array.from(serverMap.values());
-          });
-        }
-      })
-      .catch(() => {
-        setIsServerConnected(false);
-      });
-  }, []);
 
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
