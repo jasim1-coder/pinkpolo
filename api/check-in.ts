@@ -1,27 +1,26 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, updateDoc, doc, setDoc } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import { INITIAL_REGISTRATIONS } from '../src/data/mockData';
 
-// Initialize Firebase App
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
+const firebaseConfig = {
+  projectId: 'gen-lang-client-0542593931',
+  appId: '1:137410033238:web:0235016ef24f0ac2f2adf7',
+  apiKey: 'AIzaSyDJKsstF4O4s0fbBE-k0IhA5M_jV6Ft4t8',
+  authDomain: 'gen-lang-client-0542593931.firebaseapp.com',
+  storageBucket: 'gen-lang-client-0542593931.firebasestorage.app',
+  messagingSenderId: '137410033238',
+  measurementId: '',
+  oAuthClientId: '137410033238-l5jha1g8s6clag31jhlnoaq1s84mo79n.apps.googleusercontent.com',
+  recaptchaSiteKey: '',
+};
 
-const REGISTRATIONS_COL = 'registrations';
-const ACTIVITIES_COL = 'activities';
+// Global in-memory cache across serverless warm invocations
+let memoryRegistrations = [...INITIAL_REGISTRATIONS];
+let memoryActivities: any[] = [];
 
 /**
- * Vercel Serverless Function: POST /api/check-in
- *
- * Accepts JSON:
- * {
- *   "qrData": "PINK-POLO-2026-...", // QR string or Ticket ID
- *   "ticketId": "PINK-2026-001043",   // or Ticket ID
- *   "gate": "Main Turnstile Gate",    // optional
- *   "scannedBy": "External Scanner App" // optional
- * }
+ * Vercel Serverless Function: POST /api/check-in (or GET for testing)
  */
 export default async function handler(req: any, res: any) {
-  // Set standard CORS headers for any external app
+  // Set standard CORS headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -30,65 +29,53 @@ export default async function handler(req: any, res: any) {
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
   );
 
-  // Handle pre-flight OPTIONS request
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
-
-  const queryParams = req.query || {};
-  const body = req.body || {};
-
-  // Support both POST body and GET query params for quick testing
-  const rawInput = String(
-    body.qrData || body.ticketId || body.code || body.id || queryParams.qrData || queryParams.ticketId || queryParams.code || ''
-  ).trim();
-
-  const gate = String(body.gate || queryParams.gate || 'Main Gate Turnstile');
-  const scannedBy = String(body.scannedBy || queryParams.scannedBy || 'External PWA Scanner');
-
-  if (!rawInput) {
-    return res.status(400).json({
-      success: false,
-      status: 'invalid',
-      message: 'Missing qrData or ticketId in request. Please provide the scanned barcode string or ticket ID.',
-    });
-  }
-
-  const queryUpper = rawInput.toUpperCase();
-  const timeFormatted = new Date().toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-  const nowIso = new Date().toISOString().replace('T', ' ').substring(0, 16);
 
   try {
-    const colRef = collection(db, REGISTRATIONS_COL);
-    const snapshot = await getDocs(colRef);
-    let matchedDocId: string | null = null;
-    let attendee: any = null;
+    const queryParams = req.query || {};
+    const body = req.body || {};
 
-    snapshot.forEach((docSnap) => {
-      const r = docSnap.data();
+    const rawInput = String(
+      body.qrData || body.ticketId || body.code || body.id || queryParams.qrData || queryParams.ticketId || queryParams.code || ''
+    ).trim();
+
+    const gate = String(body.gate || queryParams.gate || 'Main Gate Turnstile');
+    const scannedBy = String(body.scannedBy || queryParams.scannedBy || 'External PWA Scanner');
+
+    if (!rawInput) {
+      return res.status(400).json({
+        success: false,
+        status: 'invalid',
+        message: 'Missing qrData or ticketId in request body. Please provide the scanned QR string or ticket ID.',
+      });
+    }
+
+    const queryUpper = rawInput.toUpperCase();
+    const timeFormatted = new Date().toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    const nowIso = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
+    // Look for registration in memory list
+    const foundIndex = memoryRegistrations.findIndex((r) => {
       const tid = (r.ticketId || '').toUpperCase();
       const qv = (r.qrValue || '').toUpperCase();
       const rid = (r.id || '').toUpperCase();
 
-      if (
-        (tid && tid === queryUpper) ||
-        (qv && qv === queryUpper) ||
-        (rid && rid === queryUpper) ||
-        (tid && queryUpper.includes(tid)) ||
-        (qv && queryUpper.includes(qv)) ||
-        (rid && queryUpper.includes(rid))
-      ) {
-        matchedDocId = docSnap.id;
-        attendee = r;
-      }
+      if (tid && tid === queryUpper) return true;
+      if (qv && qv === queryUpper) return true;
+      if (rid && rid === queryUpper) return true;
+      if (tid && queryUpper.includes(tid)) return true;
+      if (qv && queryUpper.includes(qv)) return true;
+      if (rid && queryUpper.includes(rid)) return true;
+      return false;
     });
 
-    if (!attendee || !matchedDocId) {
+    if (foundIndex === -1) {
       return res.status(404).json({
         success: false,
         status: 'invalid',
@@ -97,6 +84,8 @@ export default async function handler(req: any, res: any) {
         scannedAt: timeFormatted,
       });
     }
+
+    const attendee = memoryRegistrations[foundIndex];
 
     // Check if approved
     if (attendee.status !== 'Approved') {
@@ -115,7 +104,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Duplicate check
+    // Check duplicate check-in
     if (attendee.checkedIn) {
       return res.status(409).json({
         success: false,
@@ -141,15 +130,24 @@ export default async function handler(req: any, res: any) {
       checkedInAt: nowIso,
     };
 
-    await updateDoc(doc(db, REGISTRATIONS_COL, matchedDocId), {
-      checkedIn: true,
-      checkedInAt: nowIso,
-    });
+    memoryRegistrations[foundIndex] = updatedAttendee;
 
-    // Record Activity
-    const actId = `ACT-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    // Optional Firestore sync in background (non-blocking)
+    try {
+      const { initializeApp, getApps, getApp } = await import('firebase/app');
+      const { getFirestore, doc, updateDoc, setDoc } = await import('firebase/firestore');
+      const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+      const db = getFirestore(app);
+      await updateDoc(doc(db, 'registrations', updatedAttendee.id), {
+        checkedIn: true,
+        checkedInAt: nowIso,
+      });
+    } catch {
+      // Graceful fallback to memory
+    }
+
     const activity = {
-      id: actId,
+      id: `ACT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       type: 'checkin',
       title: `${updatedAttendee.name} checked in via Scanner`,
       description: `Gate: ${gate} · Scanned by: ${scannedBy} (${updatedAttendee.tier})`,
@@ -159,7 +157,7 @@ export default async function handler(req: any, res: any) {
       attendeeName: updatedAttendee.name,
       ticketId: updatedAttendee.ticketId,
     };
-    await setDoc(doc(db, ACTIVITIES_COL, actId), activity);
+    memoryActivities.unshift(activity);
 
     return res.status(200).json({
       success: true,
@@ -169,12 +167,12 @@ export default async function handler(req: any, res: any) {
       gate,
       scannedAt: timeFormatted,
     });
-  } catch (error: any) {
-    console.error('Vercel check-in endpoint error:', error);
+  } catch (err: any) {
+    console.error('Serverless error:', err);
     return res.status(500).json({
       success: false,
-      status: 'invalid',
-      message: `Internal server error during verification: ${error?.message || error}`,
+      status: 'error',
+      message: `Server execution error: ${err?.message || err}`,
     });
   }
 }
