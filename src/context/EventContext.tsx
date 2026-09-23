@@ -246,27 +246,17 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
   }, [addToast]);
 
-  // Active real-time sync with cloud store & Vercel serverless /api/sync endpoint
+  // Active real-time sync with Vercel serverless /api/sync endpoint
   useEffect(() => {
     const pollSync = async () => {
       try {
-        // 1. Fetch from cloud storage object (shared across all Vercel lambdas & clients)
-        const cloudPromise = fetch('https://api.restful-api.dev/objects/ff808181a09d98f701a0ce7afc597be9')
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null);
-
-        // 2. Fetch from local Vercel /api/sync
-        const syncPromise = fetch('/api/sync')
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null);
-
-        const [cloudData, syncData] = await Promise.all([cloudPromise, syncPromise]);
-
-        const cloudScanned: string[] = Array.isArray(cloudData?.data?.scannedTickets)
-          ? cloudData.data.scannedTickets.map((s: string) => s.toUpperCase())
-          : [];
-
+        const res = await fetch('/api/sync');
+        if (!res.ok) return;
+        const syncData = await res.json();
         const syncCheckedMap = syncData?.checkedInTickets || {};
+        const scannedKeys = Object.keys(syncCheckedMap).map((k) => k.toUpperCase());
+
+        if (scannedKeys.length === 0) return;
 
         setRegistrations((prev) => {
           let changed = false;
@@ -274,25 +264,20 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             const tid = (r.ticketId || '').toUpperCase();
             const qv = (r.qrValue || '').toUpperCase();
             const rid = (r.id || '').toUpperCase();
-
             const tDigits = tid.replace(/[^0-9]/g, '');
 
-            const isCloudScanned = cloudScanned.some((s: string) => {
+            const isScanned = scannedKeys.some((s) => {
               const sDigits = s.replace(/[^0-9]/g, '');
               return (
                 (tid && (tid === s || tid.includes(s) || s.includes(tid))) ||
                 (rid && (rid === s || rid.includes(s) || s.includes(rid))) ||
                 (qv && (qv === s || qv.includes(s) || s.includes(qv))) ||
-                (sDigits && sDigits.length >= 4 && tDigits.endsWith(sDigits))
+                (sDigits && sDigits.length >= 4 && tDigits.endsWith(sDigits)) ||
+                (sDigits && sDigits.length >= 4 && tDigits.includes(sDigits))
               );
             });
 
-            const isSyncScanned =
-              (r.ticketId && syncCheckedMap[r.ticketId]) ||
-              (tid && syncCheckedMap[tid]) ||
-              syncCheckedMap[r.id];
-
-            if ((isCloudScanned || isSyncScanned) && !r.checkedIn) {
+            if (isScanned && !r.checkedIn) {
               changed = true;
               addToast(
                 'success',
@@ -303,7 +288,7 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 ...r,
                 checkedIn: true,
                 checkedInAt:
-                  isSyncScanned?.checkedInAt ||
+                  syncCheckedMap[r.ticketId || '']?.checkedInAt ||
                   new Date().toISOString().replace('T', ' ').substring(0, 16),
               };
             }
