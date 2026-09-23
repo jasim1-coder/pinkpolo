@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { useEvent } from '../../context/EventContext';
 import { useGmail } from '../../context/GmailContext';
 import { QRCodeView } from './QRCodeView';
-import { X, Printer, Calendar, MapPin, Sparkles, CheckCircle2, Shield, UserCheck, Mail } from 'lucide-react';
+import { X, Printer, Calendar, MapPin, Sparkles, CheckCircle2, Shield, UserCheck, Mail, MessageSquare } from 'lucide-react';
 
 export const TicketPassModal: React.FC = () => {
   const { registrations, selectedTicketPass, setSelectedTicketPass } = useEvent();
@@ -15,6 +15,14 @@ export const TicketPassModal: React.FC = () => {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleWhatsApp = () => {
+    const cleanPhone = (reg.whatsapp || '').replace(/[^0-9]/g, '');
+    const msg = encodeURIComponent(
+      `*Pink Polo 2026 E-Pass*\n\nAttendee: ${reg.name}\nTicket Pass ID: ${reg.ticketId}\nTier: ${reg.tier}\n\nPresent your verified QR pass at the entrance gate.`
+    );
+    window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${msg}`, '_blank');
   };
 
   return (
@@ -31,7 +39,16 @@ export const TicketPassModal: React.FC = () => {
               Verified Event Pass
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleWhatsApp}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs text-emerald-200 hover:text-white bg-emerald-900/60 hover:bg-emerald-800 border border-emerald-700/60 rounded-md transition-colors cursor-pointer"
+              title="Share pass via WhatsApp"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+              <span>WhatsApp</span>
+            </button>
             <button
               type="button"
               onClick={() => openEmailConfirmation(reg)}

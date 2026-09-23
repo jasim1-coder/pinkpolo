@@ -9,9 +9,15 @@ import {
   logActivityToFirestore,
 } from '../services/firebaseDb';
 
-interface ScanResult {
+export interface ScanResult {
   status: 'valid' | 'already_used' | 'invalid';
   registration?: Registration;
+  guestName?: string;
+  guestEmail?: string;
+  ticketId?: string;
+  tier?: string;
+  ticketStatus?: string;
+  checkInStatus?: string;
   message: string;
   scannedAt: string;
 }
@@ -442,6 +448,8 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       qrValue,
       ticketGeneratedAt: now,
       ticketStatus: 'Valid',
+      checkInStatus: 'Not Checked In',
+      checkedIn: false,
     };
     delete (updatedReg as any).rejectionReason;
 
@@ -582,6 +590,10 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const res: ScanResult = {
         status: 'invalid',
         registration: found,
+        guestName: found.name,
+        guestEmail: found.email,
+        ticketId: found.ticketId,
+        tier: found.tier,
         message: `This registration is currently ${found.status.toUpperCase()} and has no active entry pass.`,
         scannedAt: timeFormatted,
       };
@@ -594,6 +606,12 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const res: ScanResult = {
         status: 'already_used',
         registration: found,
+        guestName: found.name,
+        guestEmail: found.email,
+        ticketId: found.ticketId,
+        tier: found.tier,
+        ticketStatus: 'Checked In',
+        checkInStatus: 'Checked In',
         message: `This ticket was already used by ${found.name} at ${found.checkedInAt || 'earlier session'}.`,
         scannedAt: timeFormatted,
       };
@@ -608,6 +626,10 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       ...found,
       checkedIn: true,
       checkedInAt: nowIso,
+      ticketStatus: 'Checked In',
+      checkInStatus: 'Checked In',
+      scannedGate: 'Main Gate',
+      scannedBy: 'Admin Console',
     };
 
     const nextList = registrations.map((item) => (item.id === found.id ? updated : item));
@@ -619,13 +641,13 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     // Save directly to Firestore DB
     saveRegistrationToFirestore(updated);
-    checkInAttendeeInFirestore(rawInput, 'Admin Console', 'Admin Console');
+    checkInAttendeeInFirestore(rawInput, 'Main Gate', 'Admin Console');
 
     // Inform server API
     fetch('/api/check-in', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ qrData: rawInput, gate: 'Admin Console' }),
+      body: JSON.stringify({ qrData: rawInput, gate: 'Main Gate' }),
     }).catch(() => {});
 
     const checkinAct: ActivityItem = {
@@ -646,6 +668,12 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const res: ScanResult = {
       status: 'valid',
       registration: updated,
+      guestName: updated.name,
+      guestEmail: updated.email,
+      ticketId: updated.ticketId,
+      tier: updated.tier,
+      ticketStatus: 'Checked In',
+      checkInStatus: 'Checked In',
       message: 'Ticket successfully verified. Attendee cleared for event access.',
       scannedAt: timeFormatted,
     };

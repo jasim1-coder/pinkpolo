@@ -21,6 +21,7 @@ import {
   Sparkles,
   Send,
   Mail,
+  MessageSquare,
 } from 'lucide-react';
 
 interface RegistrationsPageProps {
@@ -411,15 +412,33 @@ export const RegistrationsPage: React.FC<RegistrationsPageProps> = ({ onOpenRegi
                           )}
 
                           {reg.status === 'Approved' && (
-                            <button
-                              type="button"
-                              onClick={() => openEmailConfirmation(reg)}
-                              className="p-1.5 text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors inline-flex items-center gap-1 text-xs cursor-pointer"
-                              title={`Send real admission pass email to ${reg.email} via Gmail`}
-                            >
-                              <Mail className="w-3.5 h-3.5" />
-                              <span className="hidden xl:inline text-[11px] font-medium">Send Email</span>
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const cleanPhone = (reg.whatsapp || '').replace(/[^0-9]/g, '');
+                                  const msg = encodeURIComponent(
+                                    `*Pink Polo 2026 E-Pass Approved*\n\nDear ${reg.name},\nYour registration (${reg.id}) has been APPROVED!\nTicket ID: ${reg.ticketId}\nTier: ${reg.tier}\n\nPresent your verified QR barcode at the gate for fast entry.`
+                                  );
+                                  window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${msg}`, '_blank');
+                                }}
+                                className="p-1.5 text-emerald-700 hover:bg-emerald-50 border border-emerald-200 rounded-lg transition-colors inline-flex items-center gap-1 text-xs cursor-pointer"
+                                title={`Send pass to ${reg.whatsapp} via WhatsApp`}
+                              >
+                                <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                                <span className="hidden xl:inline text-[11px] font-medium text-emerald-800">WhatsApp</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => openEmailConfirmation(reg)}
+                                className="p-1.5 text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors inline-flex items-center gap-1 text-xs cursor-pointer"
+                                title={`Send real admission pass email to ${reg.email} via Gmail`}
+                              >
+                                <Mail className="w-3.5 h-3.5 text-rose-600" />
+                                <span className="hidden xl:inline text-[11px] font-medium text-rose-800">Send Email</span>
+                              </button>
+                            </>
                           )}
 
                           <button

@@ -1,5 +1,5 @@
 export type RegistrationStatus = 'Pending' | 'Approved' | 'Rejected';
-export type TicketStatus = 'Valid' | 'Void' | 'Used';
+export type TicketStatus = 'Valid' | 'Void' | 'Used' | 'Checked In' | 'Pending';
 export type AttendeeTier = 'VIP Pavilion' | 'Grandstand' | 'Garden Terrace' | 'Clubhouse Lounge';
 
 export interface Registration {
@@ -15,6 +15,9 @@ export interface Registration {
   ticketStatus?: TicketStatus;
   checkedIn: boolean;
   checkedInAt?: string;
+  checkInStatus?: 'Checked In' | 'Not Checked In';
+  scannedGate?: string;
+  scannedBy?: string;
   tier: AttendeeTier;
   notes?: string;
   rejectionReason?: string;

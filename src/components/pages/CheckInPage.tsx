@@ -287,7 +287,7 @@ export const CheckInPage: React.FC = () => {
           {lastScanResult && (
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-200">
               {/* Outcome 1: TICKET VALID */}
-              {lastScanResult.status === 'valid' && lastScanResult.registration && (
+              {lastScanResult.status === 'valid' && (
                 <div className="p-6 bg-gradient-to-r from-emerald-50 via-emerald-100/60 to-white rounded-2xl border-2 border-emerald-400 shadow-md space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-emerald-800">
@@ -309,10 +309,10 @@ export const CheckInPage: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-white/90 rounded-xl border border-emerald-200">
                     <div>
                       <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                        Attendee Name
+                        Guest Name
                       </span>
                       <p className="text-lg font-bold text-slate-900">
-                        {lastScanResult.registration.name}
+                        {lastScanResult.guestName || lastScanResult.registration?.name}
                       </p>
                     </div>
 
@@ -321,16 +321,16 @@ export const CheckInPage: React.FC = () => {
                         Ticket ID
                       </span>
                       <p className="text-base font-bold font-mono text-emerald-800">
-                        {lastScanResult.registration.ticketId}
+                        {lastScanResult.ticketId || lastScanResult.registration?.ticketId}
                       </p>
                     </div>
 
                     <div>
                       <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                        Email
+                        Guest Email
                       </span>
                       <p className="text-xs font-mono text-slate-700 truncate">
-                        {lastScanResult.registration.email}
+                        {lastScanResult.guestEmail || lastScanResult.registration?.email}
                       </p>
                     </div>
 
@@ -369,19 +369,31 @@ export const CheckInPage: React.FC = () => {
                     </span>
                   </div>
 
-                  {lastScanResult.registration && (
+                  {(lastScanResult.registration || lastScanResult.guestName) && (
                     <div className="p-4 bg-white/90 rounded-xl border border-amber-200 text-xs space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Attendee:</span>
-                        <span className="font-bold text-slate-900">{lastScanResult.registration.name}</span>
+                        <span className="text-slate-500">Guest Name:</span>
+                        <span className="font-bold text-slate-900">
+                          {lastScanResult.guestName || lastScanResult.registration?.name}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">Guest Email:</span>
+                        <span className="font-mono text-slate-700">
+                          {lastScanResult.guestEmail || lastScanResult.registration?.email}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-slate-500">Ticket ID:</span>
-                        <span className="font-mono font-bold text-slate-900">{lastScanResult.registration.ticketId}</span>
+                        <span className="font-mono font-bold text-slate-900">
+                          {lastScanResult.ticketId || lastScanResult.registration?.ticketId}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-slate-500">First Scanned At:</span>
-                        <span className="font-mono font-semibold text-amber-800">{lastScanResult.registration.checkedInAt || 'Gate 1 Turnstile'}</span>
+                        <span className="font-mono font-semibold text-amber-800">
+                          {lastScanResult.registration?.checkedInAt || lastScanResult.scannedAt}
+                        </span>
                       </div>
                     </div>
                   )}

@@ -108,9 +108,16 @@ export const subscribeToActivities = (
  */
 export const saveRegistrationToFirestore = async (registration: Registration): Promise<boolean> => {
   try {
-    const cleaned = sanitizeForFirestore(registration);
+    const enriched: Registration = {
+      ...registration,
+      checkInStatus: registration.checkedIn ? 'Checked In' : 'Not Checked In',
+      ticketStatus: registration.checkedIn
+        ? 'Checked In'
+        : registration.ticketStatus || (registration.status === 'Approved' ? 'Valid' : 'Pending'),
+    };
+    const cleaned = sanitizeForFirestore(enriched);
     await setDoc(doc(db, REGISTRATIONS_COL, registration.id), cleaned, { merge: true });
-    console.log(`[Firestore] Registration ${registration.id} saved with status: ${registration.status}`);
+    console.log(`[Firestore] Registration ${registration.id} saved with status: ${registration.status}, ticketStatus: ${enriched.ticketStatus}`);
     return true;
   } catch (err) {
     console.error('CRITICAL: Could not save registration to Firestore DB:', err);
@@ -143,6 +150,12 @@ export const checkInAttendeeInFirestore = async (
   success: boolean;
   status: 'valid' | 'already_used' | 'invalid';
   message: string;
+  guestName?: string;
+  guestEmail?: string;
+  ticketId?: string;
+  tier?: string;
+  ticketStatus?: string;
+  checkInStatus?: string;
   attendee?: Registration;
 }> => {
   const rawInput = ticketIdOrQr.trim();
@@ -200,6 +213,10 @@ export const checkInAttendeeInFirestore = async (
         success: false,
         status: 'invalid',
         message: `Entry Denied: Attendee ${attendee.name} has status "${attendee.status}". Entry pass not activated.`,
+        guestName: attendee.name,
+        guestEmail: attendee.email,
+        ticketId: attendee.ticketId,
+        tier: attendee.tier,
         attendee,
       };
     }
@@ -209,6 +226,12 @@ export const checkInAttendeeInFirestore = async (
         success: false,
         status: 'already_used',
         message: `ALREADY SCANNED: Ticket ${attendee.ticketId} was already used by ${attendee.name} at ${attendee.checkedInAt}.`,
+        guestName: attendee.name,
+        guestEmail: attendee.email,
+        ticketId: attendee.ticketId,
+        tier: attendee.tier,
+        ticketStatus: 'Checked In',
+        checkInStatus: 'Checked In',
         attendee,
       };
     }
@@ -218,11 +241,19 @@ export const checkInAttendeeInFirestore = async (
       ...attendee,
       checkedIn: true,
       checkedInAt: nowIso,
+      ticketStatus: 'Checked In',
+      checkInStatus: 'Checked In',
+      scannedGate: gate,
+      scannedBy: scannedBy,
     };
 
     await updateDoc(doc(db, REGISTRATIONS_COL, matchedDocId), {
       checkedIn: true,
       checkedInAt: nowIso,
+      ticketStatus: 'Checked In',
+      checkInStatus: 'Checked In',
+      scannedGate: gate,
+      scannedBy: scannedBy,
     });
 
     // Log Activity to Firestore DB
@@ -243,6 +274,12 @@ export const checkInAttendeeInFirestore = async (
       success: true,
       status: 'valid',
       message: `Pass Verified: ${updatedAttendee.name} cleared for entry.`,
+      guestName: updatedAttendee.name,
+      guestEmail: updatedAttendee.email,
+      ticketId: updatedAttendee.ticketId,
+      tier: updatedAttendee.tier,
+      ticketStatus: 'Checked In',
+      checkInStatus: 'Checked In',
       attendee: updatedAttendee,
     };
   } catch (err: any) {

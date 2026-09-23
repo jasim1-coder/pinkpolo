@@ -96,21 +96,6 @@ export default async function handler(req, res) {
     }
   }
 
-  // If attendee not explicitly in initial mock data, create verified match
-  if (!matched && (queryUpper.includes('PINK') || queryUpper.includes('REG') || queryUpper.length >= 6)) {
-    matched = {
-      id: `REG-${Date.now().toString().slice(-4)}`,
-      name: 'Approved Attendee',
-      email: 'attendee@pinkpolo.qa',
-      status: 'Approved',
-      tier: 'VIP Pass',
-      ticketId: rawInput,
-      qrValue: rawInput,
-      checkedIn: false,
-    };
-    store.registrations.set(matched.id, matched);
-  }
-
   if (!matched) {
     return res.status(404).json({
       success: false,
@@ -126,6 +111,10 @@ export default async function handler(req, res) {
       success: false,
       status: 'invalid',
       message: `Entry Denied: Attendee ${matched.name} has status "${matched.status}". Entry pass not activated.`,
+      guestName: matched.name,
+      guestEmail: matched.email,
+      ticketId: matched.ticketId,
+      tier: matched.tier,
       attendee: matched,
       scannedAt: timeFormatted,
     });
@@ -138,8 +127,16 @@ export default async function handler(req, res) {
       success: false,
       status: 'already_used',
       message: `ALREADY SCANNED: Ticket ${matched.ticketId || rawInput} was already used by ${matched.name} at ${existingTime}.`,
+      guestName: matched.name,
+      guestEmail: matched.email,
+      ticketId: matched.ticketId,
+      tier: matched.tier,
+      ticketStatus: 'Checked In',
+      checkInStatus: 'Checked In',
       attendee: {
         ...matched,
+        ticketStatus: 'Checked In',
+        checkInStatus: 'Checked In',
         checkedIn: true,
         checkedInAt: existingTime,
       },
@@ -152,6 +149,10 @@ export default async function handler(req, res) {
     ...matched,
     checkedIn: true,
     checkedInAt: nowIso,
+    ticketStatus: 'Checked In',
+    checkInStatus: 'Checked In',
+    scannedGate: gate,
+    scannedBy: scannedBy,
   };
   store.registrations.set(matched.id, updated);
 
@@ -163,6 +164,8 @@ export default async function handler(req, res) {
     id: matched.id,
     attendeeName: matched.name,
     checkedInAt: nowIso,
+    ticketStatus: 'Checked In',
+    checkInStatus: 'Checked In',
     gate,
     scannedBy,
   };
@@ -193,6 +196,12 @@ export default async function handler(req, res) {
     success: true,
     status: 'valid',
     message: `PASS VERIFIED: Welcome, ${updated.name}! Access granted for ${updated.tier}.`,
+    guestName: updated.name,
+    guestEmail: updated.email,
+    ticketId: updated.ticketId,
+    tier: updated.tier,
+    ticketStatus: 'Checked In',
+    checkInStatus: 'Checked In',
     attendee: updated,
     gate,
     scannedAt: timeFormatted,

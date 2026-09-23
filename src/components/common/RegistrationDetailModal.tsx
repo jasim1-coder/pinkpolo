@@ -17,6 +17,7 @@ import {
   Sparkles,
   ExternalLink,
   Send,
+  MessageSquare,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -56,6 +57,14 @@ export const RegistrationDetailModal: React.FC = () => {
 
   const openPassView = () => {
     setSelectedTicketPass(reg);
+  };
+
+  const handleWhatsAppShare = () => {
+    const cleanPhone = (reg.whatsapp || '').replace(/[^0-9]/g, '');
+    const msg = encodeURIComponent(
+      `*Pink Polo 2026 E-Pass Approved*\n\nDear ${reg.name},\nYour registration (${reg.id}) has been APPROVED!\nTicket ID: ${reg.ticketId}\nTier: ${reg.tier}\n\nPresent your verified QR barcode at the gate for fast check-in.\nSee you at Al Rayyan Grounds!`
+    );
+    window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${msg}`, '_blank');
   };
 
   return (
@@ -315,20 +324,32 @@ export const RegistrationDetailModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Real Email Dispatch Button */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-2 border-t border-rose-100">
-                <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                  <Mail className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                  <span>Real approval email to: <strong className="text-slate-800 font-mono text-[11px]">{reg.email}</strong></span>
+              {/* Real Email & WhatsApp Dispatch Buttons */}
+              <div className="pt-3 border-t border-rose-100 space-y-2">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                  Deliver E-Pass to Attendee
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openEmailConfirmation(reg)}
+                    className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+                    title={`Send real confirmation email with QR pass to ${reg.email}`}
+                  >
+                    <Send className="w-3.5 h-3.5 text-rose-200" />
+                    <span>Send Real Email (Gmail)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleWhatsAppShare}
+                    className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-[#25D366] hover:bg-[#1ebd5a] active:scale-[0.98] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+                    title={`Send E-Pass message to ${reg.whatsapp} via WhatsApp`}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-white" />
+                    <span>Send via WhatsApp</span>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => openEmailConfirmation(reg)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white text-xs font-bold rounded-xl shadow-2xs transition-all whitespace-nowrap cursor-pointer"
-                >
-                  <Send className="w-3.5 h-3.5 text-rose-200" />
-                  <span>Send Real Email via Gmail</span>
-                </button>
               </div>
             </div>
           )}

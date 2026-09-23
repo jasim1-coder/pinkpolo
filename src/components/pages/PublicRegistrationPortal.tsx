@@ -25,6 +25,7 @@ import {
   Zap,
   Printer,
   FileCheck,
+  MessageSquare,
 } from 'lucide-react';
 import poloBannerImg from '../../assets/images/pink_polo_banner_1790157590237.jpg';
 import confetti from 'canvas-confetti';
@@ -166,6 +167,15 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
       origin: { y: 0.5 },
       colors: ['#10b981', '#34d399', '#f43f5e', '#ffffff'],
     });
+  };
+
+  const handleOpenWhatsApp = () => {
+    if (!liveReg) return;
+    const cleanPhone = (liveReg.whatsapp || '').replace(/[^0-9]/g, '');
+    const msg = encodeURIComponent(
+      `*Pink Polo 2026 E-Pass Approved*\n\nDear ${liveReg.name},\nYour registration (${liveReg.id}) has been APPROVED!\nTicket ID: ${liveReg.ticketId}\nTier: ${liveReg.tier}\nAssigned Gate: ${getGateForTier(liveReg.tier)}\n\nPresent your verified QR barcode at the gate for fast entry.\nSee you at Al Rayyan Grounds!`
+    );
+    window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${msg}`, '_blank');
   };
 
   const handleResetForm = () => {
@@ -587,13 +597,13 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                   <button
                     type="button"
                     onClick={handleInstantApprove}
-                    className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+                    className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
                   >
                     <Zap className="w-3.5 h-3.5 text-emerald-200" />
                     <span>⚡ Simulate Approval & Generate QR Pass</span>
                   </button>
                 ) : (
-                  <div className="space-y-1.5 w-full">
+                  <div className="space-y-2 w-full pt-1">
                     <button
                       type="button"
                       onClick={() => setSelectedTicketPass(liveReg)}
@@ -602,14 +612,28 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                       <Ticket className="w-3.5 h-3.5 text-rose-600" />
                       <span>View / Print E-Pass</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => openEmailConfirmation(liveReg)}
-                      className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
-                    >
-                      <Mail className="w-3.5 h-3.5 text-rose-400" />
-                      <span>Send Real Pass to {liveReg.email} via Gmail</span>
-                    </button>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => openEmailConfirmation(liveReg)}
+                        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                        title="Send official ticket pass to attendee email via Gmail"
+                      >
+                        <Mail className="w-3.5 h-3.5 text-rose-400" />
+                        <span>Send Email (Gmail)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleOpenWhatsApp}
+                        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-[#25D366] hover:bg-[#1ebd5a] text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                        title="Send confirmation and pass details to attendee WhatsApp"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-white" />
+                        <span>Send WhatsApp</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -811,6 +835,19 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                       </div>
                     )}
 
+                    {liveReg.status === 'Approved' && (
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          onClick={handleOpenWhatsApp}
+                          className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-3 bg-[#25D366] hover:bg-[#1ebd5a] text-white font-bold text-[11px] rounded-lg shadow-2xs transition-colors cursor-pointer"
+                        >
+                          <MessageSquare className="w-3 h-3 text-white" />
+                          <span>Dispatch to Attendee WhatsApp</span>
+                        </button>
+                      </div>
+                    )}
+
                     <div className="pt-1 flex items-center justify-between text-[9px] text-slate-400 border-t border-slate-100">
                       <span>Pink Polo Automated Concierge</span>
                       <div className="flex items-center gap-1">
@@ -852,23 +889,36 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                     </p>
 
                     {liveReg.status === 'Approved' && (
-                      <div className="flex items-center gap-3 p-2 bg-rose-50/50 rounded-lg border border-rose-200">
-                        <div className="p-1 bg-white rounded border border-slate-200 shrink-0">
-                          <QRCodeView
-                            value={liveReg.qrValue || `PINK-POLO-2026-${liveReg.ticketId}`}
-                            size={100}
-                            ticketId={liveReg.ticketId}
-                            attendeeName={liveReg.name}
-                            showActions={false}
-                          />
+                      <>
+                        <div className="flex items-center gap-3 p-2 bg-rose-50/50 rounded-lg border border-rose-200">
+                          <div className="p-1 bg-white rounded border border-slate-200 shrink-0">
+                            <QRCodeView
+                              value={liveReg.qrValue || `PINK-POLO-2026-${liveReg.ticketId}`}
+                              size={100}
+                              ticketId={liveReg.ticketId}
+                              attendeeName={liveReg.name}
+                              showActions={false}
+                            />
+                          </div>
+                          <div className="text-[11px] space-y-0.5">
+                            <span className="text-rose-700 font-mono font-bold block">{liveReg.ticketId}</span>
+                            <span className="text-slate-900 font-semibold block">{liveReg.tier}</span>
+                            <span className="text-slate-500 text-[10px] block">{getGateForTier(liveReg.tier)}</span>
+                            <span className="text-slate-500 text-[10px] block">Dates: Nov 20–22, 2026</span>
+                          </div>
                         </div>
-                        <div className="text-[11px] space-y-0.5">
-                          <span className="text-rose-700 font-mono font-bold block">{liveReg.ticketId}</span>
-                          <span className="text-slate-900 font-semibold block">{liveReg.tier}</span>
-                          <span className="text-slate-500 text-[10px] block">{getGateForTier(liveReg.tier)}</span>
-                          <span className="text-slate-500 text-[10px] block">Dates: Nov 20–22, 2026</span>
+
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={() => openEmailConfirmation(liveReg)}
+                            className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] rounded-lg shadow-2xs transition-colors cursor-pointer"
+                          >
+                            <Mail className="w-3 h-3 text-rose-300" />
+                            <span>Send Real Email via Gmail</span>
+                          </button>
                         </div>
-                      </div>
+                      </>
                     )}
                   </div>
                 </div>
