@@ -177,7 +177,35 @@ const MOCK_REGISTRATIONS = [
 const dynamicRegistrations = new Map();
 MOCK_REGISTRATIONS.forEach((r) => dynamicRegistrations.set(r.id, r));
 
-export default function handler(req, res) {
+async function getRequestBody(req) {
+  if (req.body) {
+    if (typeof req.body === 'string') {
+      try {
+        return JSON.parse(req.body);
+      } catch {
+        return {};
+      }
+    }
+    return req.body;
+  }
+
+  return new Promise((resolve) => {
+    let data = '';
+    req.on('data', (chunk) => {
+      data += chunk;
+    });
+    req.on('end', () => {
+      try {
+        resolve(data ? JSON.parse(data) : {});
+      } catch {
+        resolve({});
+      }
+    });
+    req.on('error', () => resolve({}));
+  });
+}
+
+export default async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -192,14 +220,7 @@ export default function handler(req, res) {
   }
 
   const queryParams = req.query || {};
-  let body = req.body || {};
-  if (typeof body === 'string') {
-    try {
-      body = JSON.parse(body);
-    } catch {
-      body = {};
-    }
-  }
+  const body = await getRequestBody(req);
 
   const rawInput = String(
     body.qrData || body.ticketId || body.code || body.id || queryParams.qrData || queryParams.ticketId || queryParams.code || queryParams.id || ''
