@@ -192,7 +192,14 @@ export default function handler(req, res) {
   }
 
   const queryParams = req.query || {};
-  const body = req.body || {};
+  let body = req.body || {};
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch {
+      body = {};
+    }
+  }
 
   const rawInput = String(
     body.qrData || body.ticketId || body.code || body.id || queryParams.qrData || queryParams.ticketId || queryParams.code || queryParams.id || ''
