@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Registration, ActivityItem, DashboardStats } from './src/types';
+import { checkInAttendeeInFirestore } from './src/services/firebaseDb';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -175,10 +176,10 @@ async function startServer() {
    *   "scannedBy": "Mobile PWA Scanner" // optional
    * }
    */
-  const handleCheckIn = (req: Request, res: Response) => {
-    const { qrData, ticketId, code, gate = 'Main Turnstile Gate', scannedBy = 'External PWA Scanner' } = req.body || {};
+  const handleCheckIn = async (req: Request, res: Response) => {
+    const { qrData, ticketId, code, id, gate = 'Main Turnstile Gate', scannedBy = 'External PWA Scanner' } = req.body || {};
 
-    const rawInput = String(qrData || ticketId || code || '').trim();
+    const rawInput = String(qrData || ticketId || code || id || '').trim();
     if (!rawInput) {
       res.status(400).json({
         success: false,
@@ -188,163 +189,75 @@ async function startServer() {
       return;
     }
 
-    const query = rawInput.toUpperCase();
-    const nowIso = new Date().toISOString().replace('T', ' ').substring(0, 16);
     const timeFormatted = new Date().toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
     });
 
-    // Flexible matching: handles ticket ID, full QR string, partial matches, and registration IDs
-    let foundIndex = registrations.findIndex((r) => {
-      const tid = (r.ticketId || '').toUpperCase();
-      const qv = (r.qrValue || '').toUpperCase();
-      const rid = (r.id || '').toUpperCase();
+    try {
+      const dbResult = await checkInAttendeeInFirestore(rawInput, gate, scannedBy);
 
-      if (tid && tid === query) return true;
-      if (qv && qv === query) return true;
-      if (rid && rid === query) return true;
-      if (tid && query.includes(tid)) return true;
-      if (qv && query.includes(qv)) return true;
-      if (rid && query.includes(rid)) return true;
-      if (tid && tid.includes(query)) return true;
-      return false;
-    });
+      if (!dbResult.success) {
+        const statusCode =
+          dbResult.status === 'already_used'
+            ? 409
+            : dbResult.status === 'invalid' && dbResult.attendee
+            ? 403
+            : 404;
 
-    if (foundIndex === -1) {
-      res.status(404).json({
+        res.status(statusCode).json({
+          success: false,
+          status: dbResult.status,
+          message: dbResult.message,
+          guestName: dbResult.guestName,
+          guestEmail: dbResult.guestEmail,
+          ticketId: dbResult.ticketId,
+          tier: dbResult.tier,
+          ticketStatus: dbResult.ticketStatus,
+          checkInStatus: dbResult.checkInStatus,
+          attendee: dbResult.attendee,
+          scannedInput: rawInput,
+          scannedAt: timeFormatted,
+        });
+        return;
+      }
+
+      const updatedAttendee = dbResult.attendee!;
+
+      // Broadcast live to all connected web dashboards via SSE
+      broadcastEvent('checkin', {
+        attendee: updatedAttendee,
+        scannedBy,
+        gate,
+      });
+
+      console.log(`[PWA CHECK-IN] ${updatedAttendee.name} (${updatedAttendee.ticketId}) checked in at ${gate}`);
+
+      res.status(200).json({
+        success: true,
+        status: 'valid',
+        message: dbResult.message,
+        guestName: dbResult.guestName || updatedAttendee.name,
+        guestEmail: dbResult.guestEmail || updatedAttendee.email,
+        ticketId: dbResult.ticketId || updatedAttendee.ticketId,
+        tier: dbResult.tier || updatedAttendee.tier,
+        ticketStatus: 'Checked In',
+        checkInStatus: 'Checked In',
+        attendee: updatedAttendee,
+        gate,
+        scannedAt: timeFormatted,
+      });
+    } catch (err: any) {
+      console.error('Check-in handler exception:', err);
+      res.status(500).json({
         success: false,
         status: 'invalid',
-        message: `Invalid Pass: Barcode "${rawInput}" is not recognized in the guest database.`,
+        message: `Internal check-in error: ${err?.message || err}`,
         scannedInput: rawInput,
         scannedAt: timeFormatted,
       });
-      return;
     }
-
-    const attendee = registrations[foundIndex];
-
-    // Check if approved
-    if (attendee.status !== 'Approved') {
-      res.status(403).json({
-        success: false,
-        status: 'invalid',
-        message: `Entry Denied: Attendee ${attendee.name} has status "${attendee.status}". Entry pass not activated.`,
-        guestName: attendee.name,
-        guestEmail: attendee.email,
-        ticketId: attendee.ticketId,
-        tier: attendee.tier,
-        attendee: {
-          id: attendee.id,
-          name: attendee.name,
-          email: attendee.email,
-          tier: attendee.tier,
-          status: attendee.status,
-        },
-        scannedAt: timeFormatted,
-      });
-      return;
-    }
-
-    // Check if already checked in (Duplicate scan prevention)
-    if (attendee.checkedIn) {
-      res.status(409).json({
-        success: false,
-        status: 'already_used',
-        message: `ALREADY SCANNED: Ticket ${attendee.ticketId} was already used by ${attendee.name} at ${attendee.checkedInAt}.`,
-        guestName: attendee.name,
-        guestEmail: attendee.email,
-        ticketId: attendee.ticketId,
-        tier: attendee.tier,
-        ticketStatus: 'Checked In',
-        checkInStatus: 'Checked In',
-        attendee: {
-          id: attendee.id,
-          name: attendee.name,
-          email: attendee.email,
-          tier: attendee.tier,
-          ticketId: attendee.ticketId,
-          ticketStatus: 'Checked In',
-          checkInStatus: 'Checked In',
-          checkedIn: true,
-          checkedInAt: attendee.checkedInAt,
-        },
-        scannedAt: timeFormatted,
-      });
-      return;
-    }
-
-    // SUCCESSFUL CHECK-IN!
-    const updatedAttendee: Registration = {
-      ...attendee,
-      checkedIn: true,
-      checkedInAt: nowIso,
-      ticketStatus: 'Checked In',
-      checkInStatus: 'Checked In',
-      scannedGate: gate,
-      scannedBy: scannedBy,
-    };
-
-    registrations[foundIndex] = updatedAttendee;
-    stats = {
-      ...stats,
-      checkedIn: (stats.checkedIn || 0) + 1,
-    };
-
-    const newActivity: ActivityItem = {
-      id: `ACT-${Date.now()}`,
-      type: 'checkin',
-      title: `${updatedAttendee.name} checked in via PWA Scanner`,
-      description: `Gate: ${gate} · Scanned by: ${scannedBy} (${updatedAttendee.tier})`,
-      timestamp: timeFormatted,
-      timeAgo: 'Just now',
-      createdAt: Date.now(),
-      attendeeName: updatedAttendee.name,
-      ticketId: updatedAttendee.ticketId,
-    };
-
-    activities.unshift(newActivity);
-    if (activities.length > 100) activities.pop();
-
-    // Broadcast live to all connected web dashboards via SSE
-    broadcastEvent('checkin', {
-      attendee: updatedAttendee,
-      stats,
-      activity: newActivity,
-      scannedBy,
-      gate,
-    });
-
-    console.log(`[PWA CHECK-IN] ${updatedAttendee.name} (${updatedAttendee.ticketId}) checked in at ${gate}`);
-
-    res.json({
-      success: true,
-      status: 'valid',
-      message: `Access Granted! Welcome ${updatedAttendee.name} (${updatedAttendee.tier}).`,
-      guestName: updatedAttendee.name,
-      guestEmail: updatedAttendee.email,
-      ticketId: updatedAttendee.ticketId,
-      tier: updatedAttendee.tier,
-      ticketStatus: 'Checked In',
-      checkInStatus: 'Checked In',
-      attendee: {
-        id: updatedAttendee.id,
-        name: updatedAttendee.name,
-        email: updatedAttendee.email,
-        tier: updatedAttendee.tier,
-        ticketId: updatedAttendee.ticketId,
-        ticketStatus: 'Checked In',
-        checkInStatus: 'Checked In',
-        gate: gate,
-        checkedIn: true,
-        checkedInAt: updatedAttendee.checkedInAt,
-      },
-      stats: {
-        totalCheckedIn: stats.checkedIn,
-      },
-      scannedAt: timeFormatted,
-    });
   };
 
   app.post('/api/check-in', handleCheckIn);

@@ -1,4 +1,10 @@
 import { store } from './_store.js';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore, collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import firebaseConfig from '../firebase-applet-config.json';
+
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+const db = getFirestore(app);
 
 async function getRequestBody(req) {
   if (req.body) {
@@ -69,10 +75,12 @@ export default async function handler(req, res) {
 
   // Check if ticket was already marked as checked-in in the store
   const previousScan = store.checkedInTickets.get(rawInput) || store.checkedInTickets.get(queryUpper);
-
   const digitsOnly = queryUpper.replace(/[^0-9]/g, '');
 
   let matched = null;
+  let matchedDocId = null;
+
+  // 1. Check in-memory store
   for (const r of store.registrations.values()) {
     const tid = (r.ticketId || '').toUpperCase();
     const qv = (r.qrValue || '').toUpperCase();
@@ -92,7 +100,41 @@ export default async function handler(req, res) {
       (digitsOnly && digitsOnly.length >= 4 && tDigits.endsWith(digitsOnly))
     ) {
       matched = r;
+      matchedDocId = r.id;
       break;
+    }
+  }
+
+  // 2. If not found in-memory, query Firestore directly
+  if (!matched) {
+    try {
+      const colRef = collection(db, 'registrations');
+      const snapshot = await getDocs(colRef);
+      snapshot.forEach((docSnap) => {
+        const r = docSnap.data();
+        const tid = (r.ticketId || '').toUpperCase();
+        const qv = (r.qrValue || '').toUpperCase();
+        const rid = (r.id || '').toUpperCase();
+        const tDigits = tid.replace(/[^0-9]/g, '');
+
+        if (
+          (tid && tid === queryUpper) ||
+          (qv && qv === queryUpper) ||
+          (rid && rid === queryUpper) ||
+          (tid && tid.includes(queryUpper)) ||
+          (tid && queryUpper.includes(tid)) ||
+          (qv && qv.includes(queryUpper)) ||
+          (qv && queryUpper.includes(qv)) ||
+          (rid && queryUpper.includes(rid)) ||
+          (rid && rid.includes(queryUpper)) ||
+          (digitsOnly && digitsOnly.length >= 4 && (tDigits.endsWith(digitsOnly) || tDigits.includes(digitsOnly)))
+        ) {
+          matched = r;
+          matchedDocId = docSnap.id;
+        }
+      });
+    } catch (e) {
+      console.error('Error querying Firestore in api/check-in:', e);
     }
   }
 
@@ -155,6 +197,21 @@ export default async function handler(req, res) {
     scannedBy: scannedBy,
   };
   store.registrations.set(matched.id, updated);
+
+  if (matchedDocId) {
+    try {
+      await updateDoc(doc(db, 'registrations', matchedDocId), {
+        checkedIn: true,
+        checkedInAt: nowIso,
+        ticketStatus: 'Checked In',
+        checkInStatus: 'Checked In',
+        scannedGate: gate,
+        scannedBy: scannedBy,
+      });
+    } catch (e) {
+      console.error('Error updating doc in Firestore in api/check-in:', e);
+    }
+  }
 
   const scannedKey = matched.ticketId || rawInput;
 
