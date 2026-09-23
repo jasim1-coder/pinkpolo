@@ -246,6 +246,59 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
   }, [addToast]);
 
+  // Active real-time sync with Vercel serverless /api/sync endpoint
+  useEffect(() => {
+    const pollSync = async () => {
+      try {
+        const res = await fetch('/api/sync');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.checkedInTickets) {
+            const checkedMap = data.checkedInTickets;
+            setRegistrations((prev) => {
+              let changed = false;
+              const updated = prev.map((r) => {
+                const match =
+                  (r.ticketId && checkedMap[r.ticketId]) ||
+                  (r.ticketId && checkedMap[r.ticketId.toUpperCase()]) ||
+                  checkedMap[r.id] ||
+                  (r.qrValue && checkedMap[r.qrValue]);
+
+                if (match && !r.checkedIn) {
+                  changed = true;
+                  addToast(
+                    'success',
+                    '📱 Live Scanner Check-In!',
+                    `${r.name} (${r.tier}) verified at Gate turnstile`
+                  );
+                  return {
+                    ...r,
+                    checkedIn: true,
+                    checkedInAt: match.checkedInAt || new Date().toISOString().replace('T', ' ').substring(0, 16),
+                  };
+                }
+                return r;
+              });
+
+              if (changed) {
+                const checkedCount = updated.filter((r) => r.checkedIn).length;
+                setStats((s) => ({ ...s, checkedIn: checkedCount }));
+                return updated;
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (e) {
+        // network silent retry
+      }
+    };
+
+    pollSync();
+    const interval = setInterval(pollSync, 2000);
+    return () => clearInterval(interval);
+  }, [addToast]);
+
   // Initial load from server and SSE live stream listener
   useEffect(() => {
     fetch('/api/state')
