@@ -246,51 +246,72 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
   }, [addToast]);
 
-  // Active real-time sync with Vercel serverless /api/sync endpoint
+  // Active real-time sync with cloud store & Vercel serverless /api/sync endpoint
   useEffect(() => {
     const pollSync = async () => {
       try {
-        const res = await fetch('/api/sync');
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.checkedInTickets) {
-            const checkedMap = data.checkedInTickets;
-            setRegistrations((prev) => {
-              let changed = false;
-              const updated = prev.map((r) => {
-                const match =
-                  (r.ticketId && checkedMap[r.ticketId]) ||
-                  (r.ticketId && checkedMap[r.ticketId.toUpperCase()]) ||
-                  checkedMap[r.id] ||
-                  (r.qrValue && checkedMap[r.qrValue]);
+        // 1. Fetch from cloud storage object (shared across all Vercel lambdas & clients)
+        const cloudPromise = fetch('https://api.restful-api.dev/objects/ff808181a09d98f701a0ce7afc597be9')
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
 
-                if (match && !r.checkedIn) {
-                  changed = true;
-                  addToast(
-                    'success',
-                    '📱 Live Scanner Check-In!',
-                    `${r.name} (${r.tier}) verified at Gate turnstile`
-                  );
-                  return {
-                    ...r,
-                    checkedIn: true,
-                    checkedInAt: match.checkedInAt || new Date().toISOString().replace('T', ' ').substring(0, 16),
-                  };
-                }
-                return r;
-              });
+        // 2. Fetch from local Vercel /api/sync
+        const syncPromise = fetch('/api/sync')
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
 
-              if (changed) {
-                const checkedCount = updated.filter((r) => r.checkedIn).length;
-                setStats((s) => ({ ...s, checkedIn: checkedCount }));
-                return updated;
-              }
-              return prev;
-            });
+        const [cloudData, syncData] = await Promise.all([cloudPromise, syncPromise]);
+
+        const cloudScanned: string[] = Array.isArray(cloudData?.data?.scannedTickets)
+          ? cloudData.data.scannedTickets.map((s: string) => s.toUpperCase())
+          : [];
+
+        const syncCheckedMap = syncData?.checkedInTickets || {};
+
+        setRegistrations((prev) => {
+          let changed = false;
+          const updated = prev.map((r) => {
+            const tid = (r.ticketId || '').toUpperCase();
+            const qv = (r.qrValue || '').toUpperCase();
+            const rid = (r.id || '').toUpperCase();
+
+            const isCloudScanned =
+              (tid && cloudScanned.includes(tid)) ||
+              (rid && cloudScanned.includes(rid)) ||
+              (qv && cloudScanned.some((s: string) => qv.includes(s)));
+
+            const isSyncScanned =
+              (r.ticketId && syncCheckedMap[r.ticketId]) ||
+              (tid && syncCheckedMap[tid]) ||
+              syncCheckedMap[r.id];
+
+            if ((isCloudScanned || isSyncScanned) && !r.checkedIn) {
+              changed = true;
+              addToast(
+                'success',
+                '📱 Live Scanner Check-In!',
+                `${r.name} (${r.tier}) verified at Gate turnstile`
+              );
+              return {
+                ...r,
+                checkedIn: true,
+                checkedInAt:
+                  isSyncScanned?.checkedInAt ||
+                  new Date().toISOString().replace('T', ' ').substring(0, 16),
+              };
+            }
+            return r;
+          });
+
+          if (changed) {
+            const checkedCount = updated.filter((r) => r.checkedIn).length;
+            setStats((s) => ({ ...s, checkedIn: checkedCount }));
+            return updated;
           }
-        }
+          return prev;
+        });
       } catch (e) {
-        // network silent retry
+        // silent retry
       }
     };
 
