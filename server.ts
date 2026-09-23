@@ -353,7 +353,7 @@ async function startServer() {
   }
 
   app.listen(Number(PORT), '0.0.0.0', () => {
-    console.log(`Pink Polo 2026 Server running on http://0.0.0.0:${PORT}`);
+    console.log(`Pink Polo 2026 Server running on http://localhost:${PORT}`);
   });
 }
 
