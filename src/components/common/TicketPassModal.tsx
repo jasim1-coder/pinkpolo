@@ -5,13 +5,13 @@ import { QRCodeView } from './QRCodeView';
 import { X, Printer, Calendar, MapPin, Sparkles, CheckCircle2, Shield, UserCheck, Mail } from 'lucide-react';
 
 export const TicketPassModal: React.FC = () => {
-  const { selectedTicketPass, setSelectedTicketPass } = useEvent();
+  const { registrations, selectedTicketPass, setSelectedTicketPass } = useEvent();
   const { openEmailConfirmation } = useGmail();
   const passPrintRef = useRef<HTMLDivElement | null>(null);
 
   if (!selectedTicketPass) return null;
 
-  const reg = selectedTicketPass;
+  const reg = registrations.find((r) => r.id === selectedTicketPass.id) || selectedTicketPass;
 
   const handlePrint = () => {
     window.print();

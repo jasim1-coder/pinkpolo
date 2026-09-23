@@ -1,6 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { Registration, ActivityItem, DashboardStats, ToastMessage, RegistrationStatus, AttendeeTier } from '../types';
 import { INITIAL_DASHBOARD_STATS, INITIAL_REGISTRATIONS, INITIAL_ACTIVITIES, MOCK_CANDIDATE_NAMES } from '../data/mockData';
+import {
+  subscribeToRegistrations,
+  subscribeToActivities,
+  saveRegistrationToFirestore,
+  checkInAttendeeInFirestore,
+  logActivityToFirestore,
+} from '../services/firebaseDb';
 
 interface ScanResult {
   status: 'valid' | 'already_used' | 'invalid';
@@ -99,11 +106,22 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [pwaModalOpen, setPwaModalOpen] = useState(false);
   const [isServerConnected, setIsServerConnected] = useState(true);
 
+  // Track known checked-in IDs to trigger live alerts only on new check-ins
+  const initialCheckedInIdsRef = useRef<Set<string>>(new Set());
+
+  const addToast = useCallback((type: ToastMessage['type'], title: string, message?: string) => {
+    const id = 'toast-' + Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [{ id, type, title, message, timestamp: Date.now() }, ...prev.slice(0, 4)]);
+
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4500);
+  }, []);
+
   // Sync to localStorage and backend server
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(registrations));
-      // Push registrations to server memory
       fetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -143,9 +161,93 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, [autoSimulateEnabled]);
 
+  // Real-time Cloud Firebase Firestore Listener for External Scanner API
+  useEffect(() => {
+    // Populate baseline checked-in IDs
+    registrations.forEach((r) => {
+      if (r.checkedIn) initialCheckedInIdsRef.current.add(r.id);
+    });
+
+    const unsubscribeFirestore = subscribeToRegistrations((cloudList) => {
+      if (!cloudList || cloudList.length === 0) return;
+
+      setRegistrations((prev) => {
+        // Detect newly checked-in attendees from external scanner
+        cloudList.forEach((cloudReg) => {
+          if (cloudReg.checkedIn && !initialCheckedInIdsRef.current.has(cloudReg.id)) {
+            initialCheckedInIdsRef.current.add(cloudReg.id);
+            addToast(
+              'success',
+              '📱 Live Scanner Check-In!',
+              `${cloudReg.name} (${cloudReg.tier}) verified at Gate turnstile`
+            );
+          }
+        });
+
+        // Merge cloud list with local
+        const cloudMap = new Map<string, Registration>();
+        cloudList.forEach((r) => cloudMap.set(r.id, r));
+
+        const updated = prev.map((local) => {
+          const remote = cloudMap.get(local.id);
+          if (remote) {
+            return {
+              ...local,
+              ...remote,
+              // Never downgrade a checked-in state
+              checkedIn: local.checkedIn || remote.checkedIn,
+              checkedInAt: remote.checkedInAt || local.checkedInAt,
+            };
+          }
+          return local;
+        });
+
+        // Add any new ones created in cloud
+        cloudList.forEach((r) => {
+          if (!prev.some((p) => p.id === r.id)) {
+            updated.push(r);
+          }
+        });
+
+        // Update stats
+        const checkedCount = updated.filter((r) => r.checkedIn).length;
+        const approvedCount = updated.filter((r) => r.status === 'Approved').length;
+        const pendingCount = updated.filter((r) => r.status === 'Pending').length;
+        const rejectedCount = updated.filter((r) => r.status === 'Rejected').length;
+
+        setStats((s) => ({
+          ...s,
+          checkedIn: checkedCount,
+          approved: approvedCount,
+          pendingApproval: pendingCount,
+          rejected: rejectedCount,
+          totalRegistrations: updated.length,
+          ticketsGenerated: approvedCount,
+        }));
+
+        return updated;
+      });
+    });
+
+    // Real-time Activities subscription
+    const unsubscribeActivities = subscribeToActivities((cloudActivities) => {
+      if (cloudActivities && cloudActivities.length > 0) {
+        setActivities((prev) => {
+          const existingIds = new Set(prev.map((a) => a.id));
+          const newActs = cloudActivities.filter((a) => !existingIds.has(a.id));
+          return [...newActs, ...prev].slice(0, 50);
+        });
+      }
+    });
+
+    return () => {
+      unsubscribeFirestore();
+      unsubscribeActivities();
+    };
+  }, [addToast]);
+
   // Initial load from server and SSE live stream listener
   useEffect(() => {
-    // Initial fetch from server
     fetch('/api/state')
       .then((res) => {
         const ct = res.headers.get('content-type');
@@ -158,83 +260,33 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setIsServerConnected(true);
         if (data && Array.isArray(data.registrations)) {
           setRegistrations((localRegs) => {
+            const localMap = new Map<string, Registration>();
+            localRegs.forEach((r) => localMap.set(r.id, r));
+
             const serverMap = new Map<string, Registration>();
-            data.registrations.forEach((r: Registration) => serverMap.set(r.id, r));
+            data.registrations.forEach((r: Registration) => {
+              const local = localMap.get(r.id);
+              const isCheckedIn = r.checkedIn || (local ? local.checkedIn : false);
+              const checkedInAt = r.checkedInAt || (local ? local.checkedInAt : undefined);
+              serverMap.set(r.id, {
+                ...r,
+                checkedIn: isCheckedIn,
+                checkedInAt: checkedInAt,
+              });
+            });
+
             localRegs.forEach((r) => {
               if (!serverMap.has(r.id)) {
                 serverMap.set(r.id, r);
               }
             });
-            const merged = Array.from(serverMap.values());
-            return merged;
+            return Array.from(serverMap.values());
           });
         }
       })
       .catch(() => {
         setIsServerConnected(false);
       });
-
-    // Real-time Server-Sent Events (SSE) for instant PWA scan push
-    let eventSource: EventSource | null = null;
-    try {
-      eventSource = new EventSource('/api/events');
-
-      eventSource.onopen = () => {
-        setIsServerConnected(true);
-      };
-
-      eventSource.onerror = () => {
-        // SSE transient reconnect
-      };
-
-      eventSource.addEventListener('checkin', (e: MessageEvent) => {
-        try {
-          const payload = JSON.parse(e.data);
-          const attendee = payload.attendee as Registration;
-          if (attendee) {
-            setRegistrations((prev) =>
-              prev.map((r) => (r.id === attendee.id || r.ticketId === attendee.ticketId ? attendee : r))
-            );
-
-            if (payload.stats) {
-              setStats(payload.stats);
-            } else {
-              setStats((s) => ({ ...s, checkedIn: s.checkedIn + 1 }));
-            }
-
-            if (payload.activity) {
-              setActivities((a) => [payload.activity, ...a.slice(0, 49)]);
-            }
-
-            // Visual toast notification on admin dashboard
-            addToast(
-              'success',
-              '📱 Live PWA Scanner Check-In!',
-              `${attendee.name} (${attendee.tier}) verified at ${payload.gate || 'Turnstile'}`
-            );
-          }
-        } catch (err) {
-          console.error('Failed to parse incoming checkin SSE event:', err);
-        }
-      });
-    } catch (err) {
-      console.warn('Could not initialize EventSource:', err);
-    }
-
-    return () => {
-      if (eventSource) {
-        eventSource.close();
-      }
-    };
-  }, []);
-
-  const addToast = useCallback((type: ToastMessage['type'], title: string, message?: string) => {
-    const id = 'toast-' + Math.random().toString(36).substring(2, 9);
-    setToasts((prev) => [{ id, type, title, message, timestamp: Date.now() }, ...prev.slice(0, 4)]);
-
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4500);
   }, []);
 
   const dismissToast = useCallback((id: string) => {
@@ -307,6 +359,7 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
 
     setRegistrations((prev) => [newReg, ...prev]);
+    saveRegistrationToFirestore(newReg);
 
     setStats((prev) => ({
       ...prev,
@@ -344,6 +397,7 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
 
     setRegistrations((prev) => [newReg, ...prev]);
+    saveRegistrationToFirestore(newReg);
 
     setStats((prev) => ({
       ...prev,
@@ -392,6 +446,7 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
 
     setRegistrations((prev) => prev.map((item) => (item.id === id ? updatedReg : item)));
+    saveRegistrationToFirestore(updatedReg);
 
     if (selectedRegistration?.id === id) {
       setSelectedRegistration(updatedReg);
@@ -432,6 +487,7 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
 
     setRegistrations((prev) => prev.map((item) => (item.id === id ? updatedReg : item)));
+    saveRegistrationToFirestore(updatedReg);
 
     if (selectedRegistration?.id === id) {
       setSelectedRegistration(updatedReg);
@@ -455,12 +511,13 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const query = rawInput.toUpperCase();
     const timeFormatted = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-    // Inform server of the scan
+    // Inform server and Firestore of the scan
     fetch('/api/check-in', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ qrData: rawInput, gate: 'Local Console' }),
     }).catch(() => {});
+    checkInAttendeeInFirestore(rawInput, 'Local Console', 'Admin Console');
 
     // Look for registration by ticket ID or QR value or Registration ID
     const found = registrations.find(
@@ -516,6 +573,9 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
 
     setRegistrations((prev) => prev.map((item) => (item.id === found.id ? updated : item)));
+
+    setSelectedRegistration((curr) => (curr && curr.id === found.id ? updated : curr));
+    setSelectedTicketPass((curr) => (curr && curr.id === found.id ? updated : curr));
 
     setStats((prev) => ({
       ...prev,

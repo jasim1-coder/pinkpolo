@@ -22,6 +22,7 @@ import confetti from 'canvas-confetti';
 
 export const RegistrationDetailModal: React.FC = () => {
   const {
+    registrations,
     selectedRegistration,
     setSelectedRegistration,
     approveRegistration,
@@ -36,7 +37,7 @@ export const RegistrationDetailModal: React.FC = () => {
 
   if (!selectedRegistration) return null;
 
-  const reg = selectedRegistration;
+  const reg = registrations.find((r) => r.id === selectedRegistration.id) || selectedRegistration;
 
   const handleApprove = () => {
     approveRegistration(reg.id);
