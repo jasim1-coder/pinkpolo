@@ -147,7 +147,13 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   useEffect(() => {
     // Initial fetch from server
     fetch('/api/state')
-      .then((res) => res.json())
+      .then((res) => {
+        const ct = res.headers.get('content-type');
+        if (res.ok && ct && ct.includes('application/json')) {
+          return res.json();
+        }
+        throw new Error('Server state API not active on static host');
+      })
       .then((data) => {
         setIsServerConnected(true);
         if (data && Array.isArray(data.registrations)) {
