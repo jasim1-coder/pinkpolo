@@ -99,7 +99,9 @@ export const TicketsPage: React.FC = () => {
             <div className="text-2xl font-bold font-mono text-slate-900 mt-1 tabular-nums">
               {stats.ticketsGenerated.toLocaleString()}
             </div>
-            <span className="text-[11px] text-emerald-600 font-medium">100% with encrypted QR</span>
+            <span className="text-[11px] text-emerald-600 font-medium">
+              {stats.ticketsGenerated > 0 ? `${stats.ticketsGenerated} verified passes` : 'No passes issued'}
+            </span>
           </div>
           <div className="p-3 bg-rose-50 text-rose-600 rounded-xl">
             <Ticket className="w-5 h-5" />

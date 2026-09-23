@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useEvent } from '../../context/EventContext';
 import {
   BarChart3,
@@ -17,22 +17,41 @@ export const AnalyticsPage: React.FC = () => {
 
   // Tier breakdown calculation
   const tiers = [
-    { name: 'VIP Pavilion', color: 'bg-rose-500', barColor: 'bg-rose-500', target: 450 },
-    { name: 'Clubhouse Lounge', color: 'bg-amber-500', barColor: 'bg-amber-500', target: 350 },
-    { name: 'Garden Terrace', color: 'bg-emerald-500', barColor: 'bg-emerald-500', target: 450 },
-    { name: 'Grandstand', color: 'bg-sky-500', barColor: 'bg-sky-500', target: 600 },
+    { name: 'VIP Pavilion', color: 'bg-rose-500', barColor: 'bg-rose-500' },
+    { name: 'Clubhouse Lounge', color: 'bg-amber-500', barColor: 'bg-amber-500' },
+    { name: 'Garden Terrace', color: 'bg-emerald-500', barColor: 'bg-emerald-500' },
+    { name: 'Grandstand', color: 'bg-sky-500', barColor: 'bg-sky-500' },
   ];
 
-  const hourlyFlow = [
-    { time: '14:00', count: 120, label: 'Gate Open' },
-    { time: '15:00', count: 195, label: 'Prelims' },
-    { time: '16:00', count: 260, label: 'Peak Flow' },
-    { time: '17:00', count: 140, label: 'Exhibition' },
-    { time: '18:00', count: 65, label: 'Championship' },
-    { time: '19:00', count: 42, label: 'Trophy Gala' },
-  ];
+  // Dynamically calculate hourly turnstile gate entries from checkedInAt timestamps in DB
+  const hourlyFlow = useMemo(() => {
+    const hours = [
+      { time: '14:00', label: 'Gate Open', hourNum: 14 },
+      { time: '15:00', label: 'Prelims', hourNum: 15 },
+      { time: '16:00', label: 'Peak Flow', hourNum: 16 },
+      { time: '17:00', label: 'Exhibition', hourNum: 17 },
+      { time: '18:00', label: 'Championship', hourNum: 18 },
+      { time: '19:00', label: 'Trophy Gala', hourNum: 19 },
+    ];
 
-  const maxHour = Math.max(...hourlyFlow.map((h) => h.count));
+    return hours.map((h) => {
+      const count = registrations.filter((r) => {
+        if (!r.checkedIn) return false;
+        if (!r.checkedInAt) return false;
+        const timePart = r.checkedInAt.includes(' ') ? r.checkedInAt.split(' ')[1] : r.checkedInAt;
+        const regHour = parseInt(timePart.split(':')[0], 10);
+        return regHour === h.hourNum;
+      }).length;
+
+      return {
+        time: h.time,
+        label: h.label,
+        count,
+      };
+    });
+  }, [registrations]);
+
+  const maxHour = Math.max(1, ...hourlyFlow.map((h) => h.count));
 
   return (
     <div className="space-y-6">
@@ -124,7 +143,7 @@ export const AnalyticsPage: React.FC = () => {
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-semibold text-slate-800">{tier.name}</span>
                     <span className="font-mono text-slate-500">
-                      {count} sample attendees ({percent}%)
+                      {count} attendees ({percent}%)
                     </span>
                   </div>
                   <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
@@ -148,7 +167,7 @@ export const AnalyticsPage: React.FC = () => {
               </h3>
               <p className="text-sm font-bold text-slate-900">Gate Turnstile Pacing</p>
             </div>
-            <span className="text-xs font-mono text-slate-400">Day 1 Flow</span>
+            <span className="text-xs font-mono text-slate-400">Turnstile Entries</span>
           </div>
 
           <div className="h-48 flex items-end gap-3 pt-6 border-b border-slate-100">
@@ -177,8 +196,8 @@ export const AnalyticsPage: React.FC = () => {
           </div>
 
           <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>Peak queue wait time: <strong>48 seconds</strong></span>
-            <span>All 4 gates nominal</span>
+            <span>Total admitted: <strong className="font-mono">{stats.checkedIn}</strong></span>
+            <span>Turnstile gates active</span>
           </div>
         </div>
       </div>

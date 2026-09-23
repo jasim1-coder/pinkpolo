@@ -6,24 +6,21 @@ import {
   getDocs,
   onSnapshot,
   updateDoc,
-  query,
   Firestore,
 } from 'firebase/firestore';
 import { getApps, initializeApp, getApp } from 'firebase/app';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Registration, ActivityItem, DashboardStats } from '../types';
-import { INITIAL_REGISTRATIONS } from '../data/mockData';
+import { Registration, ActivityItem } from '../types';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const db: Firestore = getFirestore(app);
 
 const REGISTRATIONS_COL = 'registrations';
 const ACTIVITIES_COL = 'activities';
-const META_DOC = 'meta/stats';
 
 /**
- * Real-time subscription to all registrations in Firestore.
- * Automatically updates when an external scanner or admin updates an attendee.
+ * Real-time subscription to all registrations in Firestore DB.
+ * Automatically pushes updates to the entire dashboard and ticket views.
  */
 export const subscribeToRegistrations = (
   onUpdate: (registrations: Registration[]) => void,
@@ -41,24 +38,24 @@ export const subscribeToRegistrations = (
           });
           onUpdate(list);
         } else {
-          // Initialize/seed if empty
-          seedInitialRegistrations();
+          onUpdate([]);
         }
       },
       (err) => {
-        console.warn('Firestore subscription error (using local state fallback):', err);
+        console.warn('Firestore subscription notice (using local state fallback):', err);
         if (onError) onError(err);
       }
     );
     return unsubscribe;
-  } catch (err) {
+  } catch (err: any) {
     console.warn('Could not initialize Firestore snapshot listener:', err);
+    if (onError) onError(err);
     return () => {};
   }
 };
 
 /**
- * Real-time subscription to activities
+ * Real-time subscription to live activities in Firestore DB.
  */
 export const subscribeToActivities = (
   onUpdate: (activities: ActivityItem[]) => void
@@ -76,10 +73,12 @@ export const subscribeToActivities = (
           // Sort descending by createdAt
           list.sort((a, b) => b.createdAt - a.createdAt);
           onUpdate(list);
+        } else {
+          onUpdate([]);
         }
       },
       (err) => {
-        console.warn('Firestore activities subscription error:', err);
+        console.warn('Firestore activities subscription notice:', err);
       }
     );
     return unsubscribe;
@@ -89,46 +88,29 @@ export const subscribeToActivities = (
 };
 
 /**
- * Seed initial mock registrations to Firestore if empty
- */
-export const seedInitialRegistrations = async () => {
-  try {
-    const colRef = collection(db, REGISTRATIONS_COL);
-    const existing = await getDocs(colRef);
-    if (existing.empty) {
-      for (const reg of INITIAL_REGISTRATIONS) {
-        await setDoc(doc(db, REGISTRATIONS_COL, reg.id), reg);
-      }
-    }
-  } catch (err) {
-    console.warn('Could not seed initial registrations to Firestore:', err);
-  }
-};
-
-/**
- * Save / update a single registration in Firestore
+ * Save / update a single registration in Firestore DB
  */
 export const saveRegistrationToFirestore = async (registration: Registration) => {
   try {
     await setDoc(doc(db, REGISTRATIONS_COL, registration.id), registration, { merge: true });
   } catch (err) {
-    console.warn('Could not save registration to Firestore:', err);
+    console.warn('Could not save registration to Firestore DB:', err);
   }
 };
 
 /**
- * Record a check-in activity in Firestore
+ * Record a check-in / approval / registration activity in Firestore DB
  */
 export const logActivityToFirestore = async (activity: ActivityItem) => {
   try {
     await setDoc(doc(db, ACTIVITIES_COL, activity.id), activity);
   } catch (err) {
-    console.warn('Could not log activity to Firestore:', err);
+    console.warn('Could not log activity to Firestore DB:', err);
   }
 };
 
 /**
- * Perform a live check-in on Firestore by Ticket ID, QR string, or Registration ID.
+ * Perform a live check-in on Firestore DB by Ticket ID, QR string, or Registration ID.
  */
 export const checkInAttendeeInFirestore = async (
   ticketIdOrQr: string,
@@ -208,7 +190,7 @@ export const checkInAttendeeInFirestore = async (
       };
     }
 
-    // Mark as Checked In directly in Firestore
+    // Mark as Checked In directly in Firestore DB
     const updatedAttendee: Registration = {
       ...attendee,
       checkedIn: true,
@@ -220,7 +202,7 @@ export const checkInAttendeeInFirestore = async (
       checkedInAt: nowIso,
     });
 
-    // Log Activity to Firestore
+    // Log Activity to Firestore DB
     const activity: ActivityItem = {
       id: `ACT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       type: 'checkin',

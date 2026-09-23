@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useEvent } from '../../context/EventContext';
 import { NavTab } from '../layout/Sidebar';
 import {
@@ -34,7 +34,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
   } = useEvent();
 
   // Formatting numbers with comma separators
-  const formatNum = (num: number) => num.toLocaleString('en-US');
+  const formatNum = (num: number) => (num || 0).toLocaleString('en-US');
 
   // Calculate check-in percentage
   const checkInRate = stats.ticketsGenerated > 0
@@ -46,12 +46,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
     ? Math.round((stats.approved / stats.totalRegistrations) * 100)
     : 0;
 
-  // Stat cards definition
+  // Stat cards definition with live computed metrics
   const statCards = [
     {
       title: 'Total Registrations',
       value: formatNum(stats.totalRegistrations),
-      diff: '+12% from last season',
+      diff: `${stats.totalRegistrations} total requests`,
       icon: Users,
       color: 'text-slate-900',
       bgLight: 'bg-slate-50',
@@ -62,7 +62,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
     {
       title: 'Pending Approval',
       value: formatNum(stats.pendingApproval),
-      diff: 'Requires review',
+      diff: stats.pendingApproval > 0 ? `${stats.pendingApproval} awaiting review` : 'All reviewed',
       icon: Clock,
       color: 'text-amber-700',
       bgLight: 'bg-amber-50/50',
@@ -84,7 +84,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
     {
       title: 'Rejected',
       value: formatNum(stats.rejected),
-      diff: 'Duplicate / Ineligible',
+      diff: `${stats.rejected} rejected`,
       icon: XCircle,
       color: 'text-rose-700',
       bgLight: 'bg-rose-50/40',
@@ -95,7 +95,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
     {
       title: 'Tickets Generated',
       value: formatNum(stats.ticketsGenerated),
-      diff: '100% QR issued',
+      diff: `${stats.ticketsGenerated} passes issued`,
       icon: Ticket,
       color: 'text-rose-900',
       bgLight: 'bg-rose-50/60',
@@ -116,18 +116,30 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
     },
   ];
 
-  // Timeline data points
-  const timelineDays = [
-    { day: 'Sep 17', count: 180, approved: 165 },
-    { day: 'Sep 18', count: 245, approved: 230 },
-    { day: 'Sep 19', count: 320, approved: 295 },
-    { day: 'Sep 20', count: 410, approved: 380 },
-    { day: 'Sep 21', count: 520, approved: 475 },
-    { day: 'Sep 22', count: 680, approved: 620 },
-    { day: 'Today', count: stats.totalRegistrations > 1734 ? 850 + (stats.totalRegistrations - 1734) * 5 : 840, approved: 780 },
-  ];
+  // Dynamically compute 7-day timeline pacing from real DB registrations
+  const timelineDays = useMemo(() => {
+    const days: { day: string; count: number; approved: number }[] = [];
+    const today = new Date();
 
-  const maxVal = Math.max(...timelineDays.map((d) => d.count));
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const isoDateStr = d.toISOString().slice(0, 10);
+      const dayLabel = i === 0 ? 'Today' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+      const dayRegs = registrations.filter((r) => r.registrationDate && r.registrationDate.startsWith(isoDateStr));
+      const dayApproved = dayRegs.filter((r) => r.status === 'Approved').length;
+
+      days.push({
+        day: dayLabel,
+        count: dayRegs.length,
+        approved: dayApproved,
+      });
+    }
+    return days;
+  }, [registrations]);
+
+  const maxVal = Math.max(1, ...timelineDays.map((d) => d.count));
 
   return (
     <div className="space-y-6">
@@ -179,7 +191,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs rounded-xl shadow-md border border-slate-700 transition-colors"
             >
               <Sparkles className="w-4 h-4 text-rose-300" />
-              <span>+ Quick Mock Reg</span>
+              <span>+ Quick Attendee</span>
             </button>
           </div>
         </div>
@@ -406,9 +418,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
             <div className="flex items-center justify-between text-xs text-slate-500">
               <span className="flex items-center gap-1.5 text-emerald-700 font-semibold">
                 <TrendingUp className="w-3.5 h-3.5" />
-                Peak registration velocity recorded (+34% week-on-week)
+                {stats.totalRegistrations > 0
+                  ? `${stats.totalRegistrations} registrations tracked in database`
+                  : 'Live registration tracking initialized'}
               </span>
-              <span className="font-mono text-[11px] text-slate-400">Data synchronized</span>
+              <span className="font-mono text-[11px] text-slate-400">Database synchronized</span>
             </div>
           </div>
         </div>
@@ -434,67 +448,77 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
           </div>
 
           <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 max-h-[540px]">
-            {activities.map((act) => {
-              let iconBox = (
-                <div className="p-1.5 rounded-lg bg-slate-100 text-slate-700 shrink-0 mt-0.5">
-                  <Users className="w-3.5 h-3.5" />
-                </div>
-              );
+            {activities.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 space-y-2">
+                <Users className="w-8 h-8 text-slate-300 mx-auto" />
+                <p className="text-xs font-semibold text-slate-600">No activity recorded yet</p>
+                <p className="text-[11px] text-slate-400 max-w-[200px] mx-auto">
+                  Incoming registrations, pass issues, and turnstile scans will appear here live.
+                </p>
+              </div>
+            ) : (
+              activities.map((act) => {
+                let iconBox = (
+                  <div className="p-1.5 rounded-lg bg-slate-100 text-slate-700 shrink-0 mt-0.5">
+                    <Users className="w-3.5 h-3.5" />
+                  </div>
+                );
 
-              if (act.type === 'approval') {
-                iconBox = (
-                  <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700 shrink-0 mt-0.5">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                  </div>
-                );
-              } else if (act.type === 'ticket') {
-                iconBox = (
-                  <div className="p-1.5 rounded-lg bg-rose-100 text-rose-700 shrink-0 mt-0.5">
-                    <Ticket className="w-3.5 h-3.5" />
-                  </div>
-                );
-              } else if (act.type === 'checkin') {
-                iconBox = (
-                  <div className="p-1.5 rounded-lg bg-sky-100 text-sky-700 shrink-0 mt-0.5">
-                    <UserCheck className="w-3.5 h-3.5" />
-                  </div>
-                );
-              } else if (act.type === 'rejection') {
-                iconBox = (
-                  <div className="p-1.5 rounded-lg bg-rose-100 text-rose-800 shrink-0 mt-0.5">
-                    <XCircle className="w-3.5 h-3.5" />
-                  </div>
-                );
-              }
-
-              return (
-                <div
-                  key={act.id}
-                  onClick={() => {
-                    const match = registrations.find(
-                      (r) => r.name.toLowerCase() === act.attendeeName.toLowerCase()
-                    );
-                    if (match) setSelectedRegistration(match);
-                  }}
-                  className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer border border-transparent hover:border-slate-200"
-                >
-                  {iconBox}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <p className="text-xs font-bold text-slate-900 truncate">
-                        {act.title}
-                      </p>
-                      <span className="text-[10px] font-mono text-slate-400 shrink-0">
-                        {act.timeAgo}
-                      </span>
+                if (act.type === 'approval') {
+                  iconBox = (
+                    <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700 shrink-0 mt-0.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5 leading-snug line-clamp-2">
-                      {act.description}
-                    </p>
+                  );
+                } else if (act.type === 'ticket') {
+                  iconBox = (
+                    <div className="p-1.5 rounded-lg bg-rose-100 text-rose-700 shrink-0 mt-0.5">
+                      <Ticket className="w-3.5 h-3.5" />
+                    </div>
+                  );
+                } else if (act.type === 'checkin') {
+                  iconBox = (
+                    <div className="p-1.5 rounded-lg bg-sky-100 text-sky-700 shrink-0 mt-0.5">
+                      <UserCheck className="w-3.5 h-3.5" />
+                    </div>
+                  );
+                } else if (act.type === 'rejection') {
+                  iconBox = (
+                    <div className="p-1.5 rounded-lg bg-rose-100 text-rose-800 shrink-0 mt-0.5">
+                      <XCircle className="w-3.5 h-3.5" />
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={act.id}
+                    onClick={() => {
+                      const match = registrations.find(
+                        (r) => r.name.toLowerCase() === act.attendeeName.toLowerCase()
+                      );
+                      if (match) setSelectedRegistration(match);
+                    }}
+                    className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer border border-transparent hover:border-slate-200"
+                  >
+                    {iconBox}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="text-xs font-bold text-slate-900 truncate">
+                          {act.title}
+                        </p>
+                        <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                          {act.timeAgo}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5 leading-snug line-clamp-2">
+                        {act.description}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
 
           <div className="pt-2 border-t border-slate-100 text-center">

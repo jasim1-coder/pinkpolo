@@ -72,15 +72,15 @@ export const RegistrationsPage: React.FC<RegistrationsPageProps> = ({ onOpenRegi
       // Tier filter
       const matchesTier = tierFilter === 'All' || reg.tier === tierFilter;
 
-      // Date filter
+      // Date filter (dynamic based on current day and past 3 days)
       let matchesDate = true;
       if (dateFilter === 'Today') {
-        matchesDate = reg.registrationDate.includes('2026-09-23');
+        const todayIso = new Date().toISOString().slice(0, 10);
+        matchesDate = Boolean(reg.registrationDate && reg.registrationDate.startsWith(todayIso));
       } else if (dateFilter === 'Past 3 Days') {
-        matchesDate =
-          reg.registrationDate.includes('2026-09-23') ||
-          reg.registrationDate.includes('2026-09-22') ||
-          reg.registrationDate.includes('2026-09-21');
+        const regTime = new Date(reg.registrationDate).getTime();
+        const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000;
+        matchesDate = !isNaN(regTime) ? regTime >= threeDaysAgo : true;
       }
 
       return matchesSearch && matchesStatus && matchesTier && matchesDate;
@@ -250,7 +250,7 @@ export const RegistrationsPage: React.FC<RegistrationsPageProps> = ({ onOpenRegi
               className="w-full text-xs px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-rose-400 text-slate-800"
             >
               <option value="All">All Registration Dates</option>
-              <option value="Today">Today (Sep 23)</option>
+              <option value="Today">Today</option>
               <option value="Past 3 Days">Past 3 Days</option>
             </select>
           </div>

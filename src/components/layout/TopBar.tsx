@@ -280,16 +280,16 @@ export const TopBar: React.FC<TopBarProps> = ({
           )}
         </button>
 
-        {/* Primary Action: Simulate New Registration Button */}
+        {/* Primary Action: Add Attendee Button */}
         <button
           type="button"
           onClick={handleSimulateClick}
           className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 active:scale-[0.98] rounded-lg shadow-xs transition-all whitespace-nowrap"
-          title="Simulate a new incoming registration"
+          title="Add a new attendee registration"
         >
           <UserPlus className="w-3.5 h-3.5 text-rose-200" />
-          <span className="hidden lg:inline">Simulate Reg</span>
-          <span className="lg:hidden text-[11px] font-bold">+ Reg</span>
+          <span className="hidden lg:inline">+ Add Attendee</span>
+          <span className="lg:hidden text-[11px] font-bold">+ Add</span>
         </button>
 
         {/* Notifications Dropdown */}

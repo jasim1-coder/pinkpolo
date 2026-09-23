@@ -2,16 +2,22 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { INITIAL_REGISTRATIONS, INITIAL_ACTIVITIES, INITIAL_DASHBOARD_STATS } from './src/data/mockData';
 import { Registration, ActivityItem, DashboardStats } from './src/types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// In-memory persistent server store
-let registrations: Registration[] = [...INITIAL_REGISTRATIONS];
-let activities: ActivityItem[] = [...INITIAL_ACTIVITIES];
-let stats: DashboardStats = { ...INITIAL_DASHBOARD_STATS };
+// In-memory persistent server store (seeded dynamically from DB / client sync)
+let registrations: Registration[] = [];
+let activities: ActivityItem[] = [];
+let stats: DashboardStats = {
+  totalRegistrations: 0,
+  pendingApproval: 0,
+  approved: 0,
+  rejected: 0,
+  ticketsGenerated: 0,
+  checkedIn: 0,
+};
 
 // Connected SSE clients for real-time live check-in notifications
 const sseClients: Set<Response> = new Set();

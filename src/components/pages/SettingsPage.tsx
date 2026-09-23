@@ -123,10 +123,10 @@ export const SettingsPage: React.FC = () => {
         <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
             <span className="text-xs font-bold text-slate-900 block">
-              Reset Demo to Initial Sample Data
+              Clear Local Data & Reset Database State
             </span>
             <span className="text-[11px] text-slate-500">
-              Restores baseline numbers (1,734 Registrations, 42 Pending, 822 Checked In).
+              Clears all cached registrations and resets attendee statistics to clean zero state.
             </span>
           </div>
 
@@ -137,7 +137,7 @@ export const SettingsPage: React.FC = () => {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors"
             >
               <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
-              <span>Reset Sample Data</span>
+              <span>Clear Database State</span>
             </button>
           ) : (
             <div className="flex items-center gap-2">

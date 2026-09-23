@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { Registration, ActivityItem, DashboardStats, ToastMessage, RegistrationStatus, AttendeeTier } from '../types';
-import { INITIAL_DASHBOARD_STATS, INITIAL_REGISTRATIONS, INITIAL_ACTIVITIES, MOCK_CANDIDATE_NAMES } from '../data/mockData';
+import { MOCK_CANDIDATE_NAMES, EMPTY_DASHBOARD_STATS } from '../data/mockData';
 import {
   subscribeToRegistrations,
   subscribeToActivities,
@@ -51,13 +51,41 @@ interface EventContextType {
   pwaModalOpen: boolean;
   setPwaModalOpen: (open: boolean) => void;
   isServerConnected: boolean;
+  isLoading: boolean;
 }
 
 const STORAGE_KEYS = {
-  REGISTRATIONS: 'pink_polo_2026_registrations',
-  ACTIVITIES: 'pink_polo_2026_activities',
-  STATS: 'pink_polo_2026_stats',
-  AUTO_SIMULATE: 'pink_polo_2026_auto_simulate',
+  REGISTRATIONS: 'pink_polo_2026_db_registrations',
+  ACTIVITIES: 'pink_polo_2026_db_activities',
+  STATS: 'pink_polo_2026_db_stats',
+  AUTO_SIMULATE: 'pink_polo_2026_db_auto_simulate',
+};
+
+// Clean legacy mock keys if present in browser storage
+try {
+  localStorage.removeItem('pink_polo_2026_registrations');
+  localStorage.removeItem('pink_polo_2026_activities');
+  localStorage.removeItem('pink_polo_2026_stats');
+} catch {}
+
+/**
+ * Derives accurate, real-time KPI counts directly from active database registrations.
+ */
+export const computeStatsFromRegistrations = (regs: Registration[]): DashboardStats => {
+  const approved = regs.filter((r) => r.status === 'Approved').length;
+  const pending = regs.filter((r) => r.status === 'Pending').length;
+  const rejected = regs.filter((r) => r.status === 'Rejected').length;
+  const tickets = regs.filter((r) => r.status === 'Approved' && Boolean(r.ticketId)).length;
+  const checked = regs.filter((r) => r.checkedIn).length;
+
+  return {
+    totalRegistrations: regs.length,
+    pendingApproval: pending,
+    approved,
+    rejected,
+    ticketsGenerated: tickets,
+    checkedIn: checked,
+  };
 };
 
 const EventContext = createContext<EventContextType | undefined>(undefined);
@@ -66,27 +94,30 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [registrations, setRegistrations] = useState<Registration[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.REGISTRATIONS);
-      return stored ? JSON.parse(stored) : INITIAL_REGISTRATIONS;
+      return stored ? JSON.parse(stored) : [];
     } catch {
-      return INITIAL_REGISTRATIONS;
+      return [];
     }
   });
 
   const [activities, setActivities] = useState<ActivityItem[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.ACTIVITIES);
-      return stored ? JSON.parse(stored) : INITIAL_ACTIVITIES;
+      return stored ? JSON.parse(stored) : [];
     } catch {
-      return INITIAL_ACTIVITIES;
+      return [];
     }
   });
 
   const [stats, setStats] = useState<DashboardStats>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.STATS);
-      return stored ? JSON.parse(stored) : INITIAL_DASHBOARD_STATS;
+      if (stored) return JSON.parse(stored);
+      const regsStored = localStorage.getItem(STORAGE_KEYS.REGISTRATIONS);
+      if (regsStored) return computeStatsFromRegistrations(JSON.parse(regsStored));
+      return EMPTY_DASHBOARD_STATS;
     } catch {
-      return INITIAL_DASHBOARD_STATS;
+      return EMPTY_DASHBOARD_STATS;
     }
   });
 
@@ -105,6 +136,7 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [lastScanResult, setLastScanResult] = useState<ScanResult | null>(null);
   const [pwaModalOpen, setPwaModalOpen] = useState(false);
   const [isServerConnected, setIsServerConnected] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Track known checked-in IDs to trigger live alerts only on new check-ins
   const initialCheckedInIdsRef = useRef<Set<string>>(new Set());
@@ -151,62 +183,79 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, [autoSimulateEnabled]);
 
-  // Real-time Cloud Firebase Firestore Listener
+  // Initial fetch from backend API & real-time Firestore DB listeners
   useEffect(() => {
-    // Populate baseline checked-in IDs to detect new check-ins
+    let isMounted = true;
+
+    // Fast initial state hydration from /api/state if available
+    fetch('/api/state')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isMounted || !data) return;
+        if (Array.isArray(data.registrations) && data.registrations.length > 0) {
+          setRegistrations(data.registrations);
+          setStats(computeStatsFromRegistrations(data.registrations));
+        }
+        if (Array.isArray(data.activities) && data.activities.length > 0) {
+          setActivities(data.activities);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+
+    // Populate baseline checked-in IDs
     registrations.forEach((r) => {
       if (r.checkedIn) initialCheckedInIdsRef.current.add(r.id);
     });
 
+    // Real-time Cloud Firestore Listener for all database registrations
     const unsubscribeFirestore = subscribeToRegistrations(
       (cloudList) => {
-        if (!cloudList || cloudList.length === 0) return;
+        if (!isMounted) return;
+        setIsLoading(false);
 
-        // Detect newly checked-in attendees to show toast
+        // Detect newly checked-in attendees to show real-time turnstile toast
         cloudList.forEach((cloudReg) => {
           if (cloudReg.checkedIn && !initialCheckedInIdsRef.current.has(cloudReg.id)) {
             initialCheckedInIdsRef.current.add(cloudReg.id);
             addToast(
               'success',
-              '📱 Live Ticket Check-In!',
-              `${cloudReg.name} (${cloudReg.tier}) verified at Gate turnstile`
+              '📱 Live Turnstile Gate Scan!',
+              `${cloudReg.name} (${cloudReg.tier}) verified for gate entry`
             );
           }
         });
 
         setRegistrations(cloudList);
-
-        // Calculate stats directly from Firestore data
-        const checkedCount = cloudList.filter((r) => r.checkedIn).length;
-        const approvedCount = cloudList.filter((r) => r.status === 'Approved').length;
-        const pendingCount = cloudList.filter((r) => r.status === 'Pending').length;
-        const rejectedCount = cloudList.filter((r) => r.status === 'Rejected').length;
-
-        setStats({
-          checkedIn: checkedCount,
-          approved: approvedCount,
-          pendingApproval: pendingCount,
-          rejected: rejectedCount,
-          totalRegistrations: cloudList.length,
-          ticketsGenerated: approvedCount,
-        });
-
+        const derivedStats = computeStatsFromRegistrations(cloudList);
+        setStats(derivedStats);
         setIsServerConnected(true);
+
+        // Sync with server API
+        fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ updatedRegistrations: cloudList, updatedStats: derivedStats }),
+        }).catch(() => {});
       },
       (err) => {
-        console.warn('Firebase connection issue, running in local mode:', err);
-        setIsServerConnected(false);
+        console.warn('Firestore subscription status:', err);
+        if (isMounted) setIsLoading(false);
       }
     );
 
-    // Real-time Activities subscription
+    // Real-time Firestore Listener for activities
     const unsubscribeActivities = subscribeToActivities((cloudActivities) => {
-      if (cloudActivities && cloudActivities.length > 0) {
+      if (!isMounted) return;
+      if (cloudActivities) {
         setActivities(cloudActivities.slice(0, 50));
       }
     });
 
     return () => {
+      isMounted = false;
       unsubscribeFirestore();
       unsubscribeActivities();
     };
@@ -228,7 +277,8 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       attendeeName,
       ticketId,
     };
-    setActivities((prev) => [newItem, ...prev.slice(0, 39)]);
+    setActivities((prev) => [newItem, ...prev.slice(0, 49)]);
+    logActivityToFirestore(newItem);
   }, []);
 
   // Update relative timestamps in activities every minute
@@ -261,14 +311,14 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return () => clearInterval(interval);
   }, []);
 
-  // Simulate New Registration
+  // Quick Simulation of an Attendee Registration (saved to Firestore DB)
   const simulateNewRegistration = useCallback((): Registration => {
     const poolIndex = Math.floor(Math.random() * MOCK_CANDIDATE_NAMES.length);
     const candidate = MOCK_CANDIDATE_NAMES[poolIndex];
     const randSuffix = Math.floor(10 + Math.random() * 89);
     const uniqueEmail = candidate.email.replace('@', `${randSuffix}@`);
     const dateStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
-    const regId = `REG-2026-${1043 + Math.floor(Math.random() * 900)}`;
+    const regId = `REG-2026-${1000 + registrations.length + 1}`;
 
     const newReg: Registration = {
       id: regId,
@@ -281,31 +331,46 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       checkedIn: false,
     };
 
-    setRegistrations((prev) => [newReg, ...prev]);
+    const nextList = [newReg, ...registrations];
+    setRegistrations(nextList);
+    setStats(computeStatsFromRegistrations(nextList));
+
+    // Save directly to Firestore DB
     saveRegistrationToFirestore(newReg);
 
-    setStats((prev) => ({
-      ...prev,
-      totalRegistrations: prev.totalRegistrations + 1,
-      pendingApproval: prev.pendingApproval + 1,
-    }));
+    const newAct: ActivityItem = {
+      id: `act-${Date.now()}`,
+      type: 'registration',
+      title: 'New registration received',
+      description: `${newReg.name} (${newReg.email}) registered for ${newReg.tier}`,
+      timestamp: 'Just now',
+      timeAgo: 'Just now',
+      createdAt: Date.now(),
+      attendeeName: newReg.name,
+    };
 
-    addActivity(
-      'registration',
-      'New registration received',
-      `${newReg.name} (${newReg.email}) registered for ${newReg.tier}`,
-      newReg.name
-    );
+    setActivities((prev) => [newAct, ...prev.slice(0, 49)]);
+    logActivityToFirestore(newAct);
 
     addToast('info', 'New registration received', `${newReg.name} · ${newReg.email}`);
 
-    return newReg;
-  }, [addActivity, addToast]);
+    // Sync to backend
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        updatedRegistrations: [newReg],
+        newActivity: newAct,
+      }),
+    }).catch(() => {});
 
-  // Public Attendee Self-Registration Submission
+    return newReg;
+  }, [registrations, addToast]);
+
+  // Public Attendee Self-Registration Submission (saved to Firestore DB)
   const submitAttendeeRegistration = useCallback((input: AttendeeSubmissionInput): Registration => {
     const dateStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
-    const regId = `REG-2026-${1043 + Math.floor(Math.random() * 900)}`;
+    const regId = `REG-2026-${1000 + registrations.length + 1}`;
 
     const newReg: Registration = {
       id: regId,
@@ -319,28 +384,43 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       checkedIn: false,
     };
 
-    setRegistrations((prev) => [newReg, ...prev]);
+    const nextList = [newReg, ...registrations];
+    setRegistrations(nextList);
+    setStats(computeStatsFromRegistrations(nextList));
+
+    // Save directly to Firestore DB
     saveRegistrationToFirestore(newReg);
 
-    setStats((prev) => ({
-      ...prev,
-      totalRegistrations: prev.totalRegistrations + 1,
-      pendingApproval: prev.pendingApproval + 1,
-    }));
+    const newAct: ActivityItem = {
+      id: `act-${Date.now()}`,
+      type: 'registration',
+      title: 'New registration request',
+      description: `${newReg.name} (${newReg.email}) submitted request for ${newReg.tier}`,
+      timestamp: 'Just now',
+      timeAgo: 'Just now',
+      createdAt: Date.now(),
+      attendeeName: newReg.name,
+    };
 
-    addActivity(
-      'registration',
-      'New registration received',
-      `${newReg.name} (${newReg.email}) submitted request for ${newReg.tier}`,
-      newReg.name
-    );
+    setActivities((prev) => [newAct, ...prev.slice(0, 49)]);
+    logActivityToFirestore(newAct);
 
     addToast('info', 'New registration received', `${newReg.name} · ${newReg.tier}`);
 
-    return newReg;
-  }, [addActivity, addToast]);
+    // Sync with backend API
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        updatedRegistrations: [newReg],
+        newActivity: newAct,
+      }),
+    }).catch(() => {});
 
-  // Approve Flow
+    return newReg;
+  }, [registrations, addToast]);
+
+  // Approve Flow (Generates ticket & saves directly to DB)
   const approveRegistration = useCallback((id: string) => {
     const reg = registrations.find((r) => r.id === id);
     if (!reg) return;
@@ -349,9 +429,6 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       addToast('info', 'Already Approved', `${reg.name} has already been approved.`);
       return;
     }
-
-    const wasPending = reg.status === 'Pending';
-    const wasRejected = reg.status === 'Rejected';
 
     const ticketSeq = Math.floor(100000 + Math.random() * 900000);
     const ticketId = reg.ticketId || `PINK-2026-00${ticketSeq.toString().slice(-4)}`;
@@ -368,28 +445,58 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       rejectionReason: undefined,
     };
 
-    setRegistrations((prev) => prev.map((item) => (item.id === id ? updatedReg : item)));
+    const nextList = registrations.map((item) => (item.id === id ? updatedReg : item));
+    setRegistrations(nextList);
+    setStats(computeStatsFromRegistrations(nextList));
+
+    // Save to Firestore DB
     saveRegistrationToFirestore(updatedReg);
 
     if (selectedRegistration?.id === id) {
       setSelectedRegistration(updatedReg);
     }
 
-    setStats((prev) => ({
-      ...prev,
-      pendingApproval: wasPending ? Math.max(0, prev.pendingApproval - 1) : prev.pendingApproval,
-      rejected: wasRejected ? Math.max(0, prev.rejected - 1) : prev.rejected,
-      approved: prev.approved + 1,
-      ticketsGenerated: prev.ticketsGenerated + 1,
-    }));
+    const approvalAct: ActivityItem = {
+      id: `act-${Date.now()}-1`,
+      type: 'approval',
+      title: `${reg.name} was approved`,
+      description: `Registration ${reg.id} verified and approved by Admin`,
+      timestamp: 'Just now',
+      timeAgo: 'Just now',
+      createdAt: Date.now(),
+      attendeeName: reg.name,
+    };
 
-    addActivity('approval', `${reg.name} was approved`, `Registration ${reg.id} verified and approved by Admin`, reg.name);
-    addActivity('ticket', `Ticket ${ticketId} generated`, `Official e-Pass issued for ${reg.name} (${reg.tier})`, reg.name, ticketId);
+    const ticketAct: ActivityItem = {
+      id: `act-${Date.now()}-2`,
+      type: 'ticket',
+      title: `Ticket ${ticketId} issued`,
+      description: `Official e-Pass issued for ${reg.name} (${reg.tier})`,
+      timestamp: 'Just now',
+      timeAgo: 'Just now',
+      createdAt: Date.now(),
+      attendeeName: reg.name,
+      ticketId,
+    };
 
-    addToast('success', 'Registration approved and ticket generated.', `Ticket ID: ${ticketId} generated for ${reg.name}`);
-  }, [registrations, selectedRegistration, addActivity, addToast]);
+    setActivities((prev) => [ticketAct, approvalAct, ...prev.slice(0, 48)]);
+    logActivityToFirestore(approvalAct);
+    logActivityToFirestore(ticketAct);
 
-  // Reject Flow
+    addToast('success', 'Registration approved & ticket generated', `Ticket ID: ${ticketId} issued for ${reg.name}`);
+
+    // Sync to server API
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        updatedRegistrations: [updatedReg],
+        newActivity: ticketAct,
+      }),
+    }).catch(() => {});
+  }, [registrations, selectedRegistration, addToast]);
+
+  // Reject Flow (saves directly to DB)
   const rejectRegistration = useCallback((id: string, reason = 'Administrative review - invitation quota limit reached') => {
     const reg = registrations.find((r) => r.id === id);
     if (!reg) return;
@@ -399,9 +506,6 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return;
     }
 
-    const wasPending = reg.status === 'Pending';
-    const wasApproved = reg.status === 'Approved';
-
     const updatedReg: Registration = {
       ...reg,
       status: 'Rejected',
@@ -409,40 +513,59 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       rejectionReason: reason,
     };
 
-    setRegistrations((prev) => prev.map((item) => (item.id === id ? updatedReg : item)));
+    const nextList = registrations.map((item) => (item.id === id ? updatedReg : item));
+    setRegistrations(nextList);
+    setStats(computeStatsFromRegistrations(nextList));
+
+    // Save to Firestore DB
     saveRegistrationToFirestore(updatedReg);
 
     if (selectedRegistration?.id === id) {
       setSelectedRegistration(updatedReg);
     }
 
-    setStats((prev) => ({
-      ...prev,
-      pendingApproval: wasPending ? Math.max(0, prev.pendingApproval - 1) : prev.pendingApproval,
-      approved: wasApproved ? Math.max(0, prev.approved - 1) : prev.approved,
-      ticketsGenerated: wasApproved ? Math.max(0, prev.ticketsGenerated - 1) : prev.ticketsGenerated,
-      rejected: prev.rejected + 1,
-    }));
+    const rejAct: ActivityItem = {
+      id: `act-${Date.now()}`,
+      type: 'rejection',
+      title: `${reg.name} was rejected`,
+      description: `Reason: ${reason}`,
+      timestamp: 'Just now',
+      timeAgo: 'Just now',
+      createdAt: Date.now(),
+      attendeeName: reg.name,
+    };
 
-    addActivity('rejection', `${reg.name} was rejected`, `Reason: ${reason}`, reg.name);
-    addToast('warning', 'Registration rejected.', `${reg.name} has been marked as Rejected.`);
-  }, [registrations, selectedRegistration, addActivity, addToast]);
+    setActivities((prev) => [rejAct, ...prev.slice(0, 49)]);
+    logActivityToFirestore(rejAct);
 
-  // Scan Ticket logic
+    addToast('warning', 'Registration rejected', `${reg.name} marked as Rejected.`);
+
+    // Sync to server API
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        updatedRegistrations: [updatedReg],
+        newActivity: rejAct,
+      }),
+    }).catch(() => {});
+  }, [registrations, selectedRegistration, addToast]);
+
+  // Scan Ticket logic (Updates Firestore DB and local state)
   const scanTicket = useCallback((ticketIdOrQr: string): ScanResult => {
     const rawInput = ticketIdOrQr.trim();
     const query = rawInput.toUpperCase();
     const timeFormatted = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-    // Inform server and Firestore of the scan
+    // Inform server and Firestore DB of the scan
     fetch('/api/check-in', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ qrData: rawInput, gate: 'Local Console' }),
+      body: JSON.stringify({ qrData: rawInput, gate: 'Admin Console' }),
     }).catch(() => {});
-    checkInAttendeeInFirestore(rawInput, 'Local Console', 'Admin Console');
+    checkInAttendeeInFirestore(rawInput, 'Admin Console', 'Admin Console');
 
-    // Look for registration by ticket ID or QR value or Registration ID
+    // Look for registration in local state
     const found = registrations.find(
       (r) =>
         (r.ticketId && r.ticketId.toUpperCase() === query) ||
@@ -455,11 +578,11 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!found) {
       const res: ScanResult = {
         status: 'invalid',
-        message: 'No valid ticket or attendee found matching identifier.',
+        message: `No attendee found matching identifier "${ticketIdOrQr}".`,
         scannedAt: timeFormatted,
       };
       setLastScanResult(res);
-      addToast('error', 'Invalid Ticket Scanned', `Identifier "${ticketIdOrQr}" is not recognized.`);
+      addToast('error', 'Invalid Ticket Scanned', `Identifier "${ticketIdOrQr}" not found in database.`);
       return res;
     }
 
@@ -467,7 +590,7 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const res: ScanResult = {
         status: 'invalid',
         registration: found,
-        message: `This registration is currently ${found.status.toUpperCase()} and has no active entry ticket.`,
+        message: `This registration is currently ${found.status.toUpperCase()} and has no active entry pass.`,
         scannedAt: timeFormatted,
       };
       setLastScanResult(res);
@@ -479,7 +602,7 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const res: ScanResult = {
         status: 'already_used',
         registration: found,
-        message: 'This ticket has already been used.',
+        message: `This ticket was already used by ${found.name} at ${found.checkedInAt || 'earlier session'}.`,
         scannedAt: timeFormatted,
       };
       setLastScanResult(res);
@@ -495,23 +618,26 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       checkedInAt: nowIso,
     };
 
-    setRegistrations((prev) => prev.map((item) => (item.id === found.id ? updated : item)));
+    const nextList = registrations.map((item) => (item.id === found.id ? updated : item));
+    setRegistrations(nextList);
+    setStats(computeStatsFromRegistrations(nextList));
 
     setSelectedRegistration((curr) => (curr && curr.id === found.id ? updated : curr));
     setSelectedTicketPass((curr) => (curr && curr.id === found.id ? updated : curr));
 
-    setStats((prev) => ({
-      ...prev,
-      checkedIn: prev.checkedIn + 1,
-    }));
+    const checkinAct: ActivityItem = {
+      id: `act-${Date.now()}`,
+      type: 'checkin',
+      title: `${found.name} checked in`,
+      description: `Verified at Main Gate · Pass ${found.ticketId} (${found.tier})`,
+      timestamp: 'Just now',
+      timeAgo: 'Just now',
+      createdAt: Date.now(),
+      attendeeName: found.name,
+      ticketId: found.ticketId,
+    };
 
-    addActivity(
-      'checkin',
-      `${found.name} checked in`,
-      `Verified at Main Gate · Pass ${found.ticketId} (${found.tier})`,
-      found.name,
-      found.ticketId
-    );
+    setActivities((prev) => [checkinAct, ...prev.slice(0, 49)]);
 
     const res: ScanResult = {
       status: 'valid',
@@ -522,23 +648,21 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setLastScanResult(res);
     addToast('success', 'TICKET VALID', `${found.name} marked as Checked In.`);
     return res;
-  }, [registrations, addActivity, addToast]);
+  }, [registrations, addToast]);
 
-  // Simulate scanning a random ticket from mock data
+  // Simulate scanning a random ticket from real database
   const simulateScanRandomTicket = useCallback((): ScanResult => {
-    // Collect all approved attendees
     const approvedList = registrations.filter((r) => r.status === 'Approved' && r.ticketId);
     if (approvedList.length === 0) {
       const fallbackRes: ScanResult = {
         status: 'invalid',
-        message: 'No approved tickets available to scan. Approve an attendee first.',
+        message: 'No approved tickets in database to scan. Approve an attendee first.',
         scannedAt: new Date().toLocaleTimeString(),
       };
       setLastScanResult(fallbackRes);
       return fallbackRes;
     }
 
-    // Prefer unchecked attendees 70% of time so staff can see valid scans, but occasionally pick already checked
     const unchecked = approvedList.filter((r) => !r.checkedIn);
     let chosen: Registration;
     if (unchecked.length > 0 && Math.random() < 0.75) {
@@ -550,7 +674,7 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return scanTicket(chosen.ticketId!);
   }, [registrations, scanTicket]);
 
-  // Auto-simulator: creates new mock registration every 12-14 seconds when active
+  // Auto-simulator: creates new registration every 13 seconds when active
   useEffect(() => {
     if (!autoSimulateEnabled) return;
 
@@ -574,9 +698,9 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   }, [addToast]);
 
   const resetToDefault = useCallback(() => {
-    setRegistrations(INITIAL_REGISTRATIONS);
-    setActivities(INITIAL_ACTIVITIES);
-    setStats(INITIAL_DASHBOARD_STATS);
+    setRegistrations([]);
+    setActivities([]);
+    setStats(EMPTY_DASHBOARD_STATS);
     setAutoSimulateEnabled(false);
     setSelectedRegistration(null);
     setSelectedTicketPass(null);
@@ -587,7 +711,17 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       localStorage.removeItem(STORAGE_KEYS.STATS);
       localStorage.removeItem(STORAGE_KEYS.AUTO_SIMULATE);
     } catch {}
-    addToast('info', 'Demo Data Reset', 'Restored initial sample registrations and statistics.');
+
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        updatedRegistrations: [],
+        updatedStats: EMPTY_DASHBOARD_STATS,
+      }),
+    }).catch(() => {});
+
+    addToast('info', 'Database Cleared', 'Reset all local attendee registrations and statistics to clean zero state.');
   }, [addToast]);
 
   return (
@@ -618,6 +752,7 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         pwaModalOpen,
         setPwaModalOpen,
         isServerConnected,
+        isLoading,
       }}
     >
       {children}
