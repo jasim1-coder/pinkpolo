@@ -19,8 +19,24 @@ const REGISTRATIONS_COL = 'registrations';
 const ACTIVITIES_COL = 'activities';
 
 /**
+ * Remove any undefined properties from object to satisfy Firestore SDK serialization rules
+ */
+export const sanitizeForFirestore = <T extends Record<string, any>>(obj: T): Record<string, any> => {
+  const cleaned: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        cleaned[key] = sanitizeForFirestore(value);
+      } else {
+        cleaned[key] = value;
+      }
+    }
+  }
+  return cleaned;
+};
+
+/**
  * Real-time subscription to all registrations in Firestore DB.
- * Automatically pushes updates to the entire dashboard and ticket views.
  */
 export const subscribeToRegistrations = (
   onUpdate: (registrations: Registration[]) => void,
@@ -88,24 +104,31 @@ export const subscribeToActivities = (
 };
 
 /**
- * Save / update a single registration in Firestore DB
+ * Save / update a single registration in Firestore DB (with clean undefined stripping)
  */
-export const saveRegistrationToFirestore = async (registration: Registration) => {
+export const saveRegistrationToFirestore = async (registration: Registration): Promise<boolean> => {
   try {
-    await setDoc(doc(db, REGISTRATIONS_COL, registration.id), registration, { merge: true });
+    const cleaned = sanitizeForFirestore(registration);
+    await setDoc(doc(db, REGISTRATIONS_COL, registration.id), cleaned, { merge: true });
+    console.log(`[Firestore] Registration ${registration.id} saved with status: ${registration.status}`);
+    return true;
   } catch (err) {
-    console.warn('Could not save registration to Firestore DB:', err);
+    console.error('CRITICAL: Could not save registration to Firestore DB:', err);
+    return false;
   }
 };
 
 /**
  * Record a check-in / approval / registration activity in Firestore DB
  */
-export const logActivityToFirestore = async (activity: ActivityItem) => {
+export const logActivityToFirestore = async (activity: ActivityItem): Promise<boolean> => {
   try {
-    await setDoc(doc(db, ACTIVITIES_COL, activity.id), activity);
+    const cleaned = sanitizeForFirestore(activity);
+    await setDoc(doc(db, ACTIVITIES_COL, activity.id), cleaned);
+    return true;
   } catch (err) {
-    console.warn('Could not log activity to Firestore DB:', err);
+    console.error('Could not log activity to Firestore DB:', err);
+    return false;
   }
 };
 

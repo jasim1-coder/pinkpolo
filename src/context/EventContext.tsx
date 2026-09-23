@@ -442,14 +442,14 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       qrValue,
       ticketGeneratedAt: now,
       ticketStatus: 'Valid',
-      rejectionReason: undefined,
     };
+    delete (updatedReg as any).rejectionReason;
 
     const nextList = registrations.map((item) => (item.id === id ? updatedReg : item));
     setRegistrations(nextList);
     setStats(computeStatsFromRegistrations(nextList));
 
-    // Save to Firestore DB
+    // Save directly to Firestore DB
     saveRegistrationToFirestore(updatedReg);
 
     if (selectedRegistration?.id === id) {
@@ -509,9 +509,9 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const updatedReg: Registration = {
       ...reg,
       status: 'Rejected',
-      ticketStatus: undefined,
       rejectionReason: reason,
     };
+    delete (updatedReg as any).ticketStatus;
 
     const nextList = registrations.map((item) => (item.id === id ? updatedReg : item));
     setRegistrations(nextList);
@@ -556,14 +556,6 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const rawInput = ticketIdOrQr.trim();
     const query = rawInput.toUpperCase();
     const timeFormatted = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-    // Inform server and Firestore DB of the scan
-    fetch('/api/check-in', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ qrData: rawInput, gate: 'Admin Console' }),
-    }).catch(() => {});
-    checkInAttendeeInFirestore(rawInput, 'Admin Console', 'Admin Console');
 
     // Look for registration in local state
     const found = registrations.find(
@@ -625,6 +617,17 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setSelectedRegistration((curr) => (curr && curr.id === found.id ? updated : curr));
     setSelectedTicketPass((curr) => (curr && curr.id === found.id ? updated : curr));
 
+    // Save directly to Firestore DB
+    saveRegistrationToFirestore(updated);
+    checkInAttendeeInFirestore(rawInput, 'Admin Console', 'Admin Console');
+
+    // Inform server API
+    fetch('/api/check-in', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ qrData: rawInput, gate: 'Admin Console' }),
+    }).catch(() => {});
+
     const checkinAct: ActivityItem = {
       id: `act-${Date.now()}`,
       type: 'checkin',
@@ -638,6 +641,7 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
 
     setActivities((prev) => [checkinAct, ...prev.slice(0, 49)]);
+    logActivityToFirestore(checkinAct);
 
     const res: ScanResult = {
       status: 'valid',
