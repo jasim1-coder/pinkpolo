@@ -61,12 +61,6 @@ const AdminAppContent: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-  const handleGlobalSearch = (query: string) => {
-    if (query.trim().length > 0 && currentTab !== 'registrations' && currentTab !== 'tickets') {
-      setCurrentTab('registrations');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans antialiased text-slate-900">
       {/* Sidebar Navigation */}
@@ -83,24 +77,22 @@ const AdminAppContent: React.FC = () => {
         <TopBar
           currentTab={currentTab}
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
-          onSearchGlobal={handleGlobalSearch}
           setCurrentTab={setCurrentTab}
         />
 
         {/* Content Body */}
         <main
-          className={`flex-1 w-full mx-auto ${
-            currentTab === 'register'
+          className={`flex-1 w-full mx-auto ${currentTab === 'register'
               ? 'p-2 sm:p-4 lg:px-6 lg:py-4 max-w-7xl lg:h-[calc(100vh-4rem)] flex flex-col justify-start'
               : 'p-4 lg:p-8 max-w-7xl pb-16'
-          }`}
+            }`}
         >
           {currentTab === 'dashboard' && <DashboardPage setCurrentTab={setCurrentTab} />}
           {currentTab === 'registrations' && (
             <RegistrationsPage onOpenRegisterForm={() => setCurrentTab('register')} />
           )}
           {currentTab === 'tickets' && <TicketsPage />}
-          {currentTab === 'checkin' && <AnalyticsPage />}
+          {currentTab === 'checkin' && <CheckInPage />}
           {currentTab === 'register' && <PublicRegistrationPortal isStandalonePublic={false} />}
           {currentTab === 'analytics' && <AnalyticsPage />}
         </main>

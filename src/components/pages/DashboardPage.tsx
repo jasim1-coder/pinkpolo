@@ -31,7 +31,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
     stats,
     activities,
     registrations,
-    simulateNewRegistration,
     setSelectedRegistration,
   } = useEvent();
 
@@ -191,21 +190,21 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
   return (
     <div className="space-y-6">
       {/* Hero Event Banner Card */}
-      <div className="relative overflow-hidden rounded-2xl border border-rose-200/80 bg-slate-900 text-white shadow-sm">
+      <div className="relative overflow-hidden rounded-2xl border border-rose-200/70 shadow-md">
         <div className="absolute inset-0 z-0">
           <img
             src={poloBannerImg}
             alt="Pink Polo 2026 Grounds"
             referrerPolicy="no-referrer"
-            className="w-full h-full object-cover object-center opacity-30"
+            className="w-full h-full object-cover object-center"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900/90 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-950/70 via-slate-900/35 to-transparent" />
         </div>
 
         <div className="relative z-10 p-6 lg:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="max-w-xl space-y-3">
+          <div className="max-w-xl space-y-3 drop-shadow-sm">
             {/* Ghantoot Racing & Polo Club Logo Badge */}
-            <div className="bg-white/95 backdrop-blur-md rounded-xl p-2 sm:p-2.5 shadow-md inline-flex items-center gap-2.5 border border-white/40">
+            <div className="bg-white/95 backdrop-blur-md rounded-xl p-2 sm:p-2.5 shadow-md inline-flex items-center gap-2.5 border border-white/60">
               <img
                 src={ghantootLogo}
                 alt="Ghantoot Racing & Polo Club"
@@ -222,15 +221,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded text-[11px] font-bold tracking-wider uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30">
+              <span className="px-2.5 py-0.5 rounded text-[11px] font-bold tracking-wider uppercase bg-rose-600 text-white shadow-xs">
                 Official Event Dashboard
               </span>
-              <span className="text-xs text-slate-300 font-medium">Pink Polo 2026</span>
+              <span className="text-xs text-white/90 font-medium drop-shadow-sm">Pink Polo 2026</span>
             </div>
-            <h2 className="text-2xl lg:text-3xl font-serif font-bold text-white tracking-tight">
+            <h2 className="text-2xl lg:text-3xl font-serif font-bold text-white tracking-tight drop-shadow-md">
               Ghantoot Pink Polo Invitational & Gala
             </h2>
-            <p className="text-xs lg:text-sm text-slate-300 leading-relaxed">
+            <p className="text-xs lg:text-sm text-slate-100 font-medium leading-relaxed drop-shadow-sm">
               Real-time monitoring console for guest approvals, verified QR entry passes, and Gate 1–4 turnstile check-ins.
             </p>
           </div>
@@ -238,24 +237,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setCurrentTab('register')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-rose-500 hover:bg-rose-400 text-white font-bold text-xs rounded-xl shadow-md transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-lg transition-all active:scale-[0.98]"
             >
               <Send className="w-4 h-4 text-white" />
               <span>Submit Request (Guest UI)</span>
             </button>
             <button
               onClick={() => setCurrentTab('analytics')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-slate-900 hover:bg-rose-50 font-semibold text-xs rounded-xl shadow-md transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white/95 hover:bg-white text-slate-900 hover:text-rose-700 font-bold text-xs rounded-xl shadow-lg backdrop-blur-sm transition-all active:scale-[0.98]"
             >
               <BarChart3 className="w-4 h-4 text-rose-600" />
               <span>Attendance Manifest</span>
-            </button>
-            <button
-              onClick={simulateNewRegistration}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs rounded-xl shadow-md border border-slate-700 transition-colors"
-            >
-              <Sparkles className="w-4 h-4 text-rose-300" />
-              <span>+ Quick Attendee</span>
             </button>
           </div>
         </div>
@@ -269,7 +261,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
             <div
               key={idx}
               onClick={() => setCurrentTab(card.tabTarget)}
-              className={`p-4 rounded-xl border bg-white shadow-2xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between ${card.border}`}
+              className={`p-4 rounded-2xl border bg-white shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group flex flex-col justify-between ${card.border}`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-slate-500 group-hover:text-slate-900 transition-colors">
@@ -301,7 +293,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
           {/* Chart 1: Registration Status Breakdown + Check-In Progress */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Status Breakdown Card */}
-            <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+            <div className="p-5 bg-white rounded-2xl border border-slate-200/90 shadow-md hover:shadow-xl transition-all duration-300 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -370,7 +362,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
             </div>
 
             {/* Check-In Gate Progress Card */}
-            <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between space-y-4">
+            <div className="p-5 bg-white rounded-2xl border border-slate-200/90 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between space-y-4">
               <div>
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -429,7 +421,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
           </div>
 
           {/* Chart 2: Registrations Over Time (Timeline Chart) */}
-          <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+          <div className="p-5 bg-white rounded-2xl border border-slate-200/90 shadow-md hover:shadow-xl transition-all duration-300 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -491,7 +483,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
           </div>
 
           {/* Report 3: SEPARATE GATE ATTENDANCE & CHECK-IN REPORT BY DATE */}
-          <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+          <div className="p-5 bg-white rounded-2xl border border-slate-200/90 shadow-md hover:shadow-xl transition-all duration-300 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-100">
               <div>
                 <div className="flex items-center gap-2">
@@ -612,7 +604,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
         </div>
 
         {/* Right 1 Col: LIVE RECENT ACTIVITY SECTION */}
-        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs flex flex-col space-y-4">
+        <div className="p-5 bg-white rounded-2xl border border-slate-200/90 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <div>
               <div className="flex items-center gap-2">
