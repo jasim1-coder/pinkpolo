@@ -24,6 +24,7 @@ import {
   ZapOff,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import ghantootLogo from '../../assets/images/ghantoot_polo_logo.png';
 
 export const CheckInPage: React.FC = () => {
   const {
@@ -348,17 +349,23 @@ export const CheckInPage: React.FC = () => {
       {/* Top Console Bar */}
       <div className="bg-slate-900 text-white p-5 rounded-2xl border border-slate-800 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-rose-600/30 border border-rose-500/40 flex items-center justify-center text-rose-300">
-            <Scan className="w-5 h-5" />
+          <div className="bg-white/95 rounded-xl p-1.5 shadow-sm shrink-0 border border-white/40">
+            <img
+              src={ghantootLogo}
+              alt="Ghantoot Racing & Polo Club"
+              className="h-8 w-auto object-contain"
+            />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[11px] font-mono tracking-widest text-emerald-400 uppercase">
-                Scanner Terminal Online
+              <span className="text-[10px] font-mono tracking-widest text-emerald-400 uppercase">
+                Turnstile Terminal Online
               </span>
+              <span className="text-slate-500 text-[10px]">·</span>
+              <span className="text-[10px] text-rose-300 font-medium">Ghantoot Pink Polo 2026</span>
             </div>
-            <h2 className="text-lg font-bold text-white tracking-tight">Gate Check-In Console</h2>
+            <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">Gate Check-In Console</h2>
           </div>
         </div>
 

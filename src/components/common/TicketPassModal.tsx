@@ -2,12 +2,15 @@ import React, { useRef } from 'react';
 import { useEvent } from '../../context/EventContext';
 import { useGmail } from '../../context/GmailContext';
 import { QRCodeView } from './QRCodeView';
+import { sendWhatsAppTicketPass, getGateForTier } from '../../services/whatsappService';
 import { X, Printer, Calendar, MapPin, Sparkles, CheckCircle2, Shield, UserCheck, Mail, MessageSquare } from 'lucide-react';
+import ghantootLogo from '../../assets/images/ghantoot_polo_logo.png';
 
 export const TicketPassModal: React.FC = () => {
-  const { registrations, selectedTicketPass, setSelectedTicketPass } = useEvent();
+  const { registrations, selectedTicketPass, setSelectedTicketPass, addToast } = useEvent();
   const { openEmailConfirmation } = useGmail();
   const passPrintRef = useRef<HTMLDivElement | null>(null);
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = React.useState(false);
 
   if (!selectedTicketPass) return null;
 
@@ -17,12 +20,32 @@ export const TicketPassModal: React.FC = () => {
     window.print();
   };
 
-  const handleWhatsApp = () => {
-    const cleanPhone = (reg.whatsapp || '').replace(/[^0-9]/g, '');
-    const msg = encodeURIComponent(
-      `*Pink Polo 2026 E-Pass*\n\nAttendee: ${reg.name}\nTicket Pass ID: ${reg.ticketId}\nTier: ${reg.tier}\n\nPresent your verified QR pass at the entrance gate.`
-    );
-    window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${msg}`, '_blank');
+  const handleWhatsApp = async () => {
+    if (!reg.whatsapp) {
+      addToast('warning', 'Missing Phone Number', 'No WhatsApp number on file.');
+      return;
+    }
+    setIsSendingWhatsApp(true);
+    addToast('info', 'Sending WhatsApp Pass...', `Dispatching QR pass to ${reg.whatsapp} via Meta Cloud API...`);
+    try {
+      const res = await sendWhatsAppTicketPass({
+        toPhone: reg.whatsapp,
+        attendeeName: reg.name,
+        ticketId: reg.ticketId || reg.id,
+        tier: reg.tier,
+        gate: getGateForTier(reg.tier),
+        qrValue: reg.qrValue || `PINK-POLO-2026-${reg.ticketId || reg.id}`,
+      });
+      if (res.success) {
+        addToast('success', 'WhatsApp Pass Dispatched!', `QR admission pass sent to ${reg.whatsapp}`);
+      } else {
+        addToast('error', 'WhatsApp Dispatch Error', res.error || 'Failed to dispatch WhatsApp pass.');
+      }
+    } catch (e: any) {
+      addToast('error', 'WhatsApp Exception', e?.message || 'Error communicating with WhatsApp API.');
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
   };
 
   return (
@@ -83,15 +106,24 @@ export const TicketPassModal: React.FC = () => {
 
             {/* Pass Header */}
             <div className="p-5 pb-3 border-b border-dashed border-rose-200 bg-rose-50/30">
+              {/* Ghantoot Logo Banner */}
+              <div className="flex justify-center pb-2.5 mb-2 border-b border-rose-100">
+                <img
+                  src={ghantootLogo}
+                  alt="Ghantoot Racing & Polo Club"
+                  className="h-11 w-auto object-contain"
+                />
+              </div>
+
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-widest text-rose-600">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-rose-600">
                     Official e-Pass
                   </span>
-                  <h3 className="text-xl font-extrabold text-slate-900 font-serif tracking-tight">
+                  <h3 className="text-lg font-extrabold text-slate-900 font-serif tracking-tight">
                     PINK POLO 2026
                   </h3>
-                  <p className="text-xs text-slate-500">Charity Invitational & Gala</p>
+                  <p className="text-[11px] text-slate-500">Ghantoot Racing & Polo Club</p>
                 </div>
                 <div className="text-right">
                   <span className="inline-block px-2.5 py-1 text-[11px] font-bold text-rose-800 bg-rose-100 border border-rose-200 rounded-md">

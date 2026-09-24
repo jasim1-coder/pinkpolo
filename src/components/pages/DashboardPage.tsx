@@ -19,6 +19,7 @@ import {
   Send,
 } from 'lucide-react';
 import poloBannerImg from '../../assets/images/pink_polo_banner_1790157590237.jpg';
+import ghantootLogo from '../../assets/images/ghantoot_polo_logo.png';
 
 interface DashboardPageProps {
   setCurrentTab: (tab: NavTab) => void;
@@ -201,15 +202,32 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
         </div>
 
         <div className="relative z-10 p-6 lg:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="max-w-xl space-y-2">
+          <div className="max-w-xl space-y-3">
+            {/* Ghantoot Racing & Polo Club Logo Badge */}
+            <div className="bg-white/95 backdrop-blur-md rounded-xl p-2 sm:p-2.5 shadow-md inline-flex items-center gap-2.5 border border-white/40">
+              <img
+                src={ghantootLogo}
+                alt="Ghantoot Racing & Polo Club"
+                className="h-9 w-auto object-contain"
+              />
+              <div className="flex flex-col">
+                <span className="text-[11px] font-bold text-slate-900 tracking-tight leading-tight">
+                  GHANTOOT RACING & POLO CLUB
+                </span>
+                <span className="text-[9px] text-rose-700 font-semibold leading-tight">
+                  نادي غنتوت لسباق الخيل والبولو
+                </span>
+              </div>
+            </div>
+
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded text-[11px] font-bold tracking-wider uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30">
                 Official Event Dashboard
               </span>
-              <span className="text-xs text-slate-300 font-medium">Qatar Equestrian Federation</span>
+              <span className="text-xs text-slate-300 font-medium">Pink Polo 2026</span>
             </div>
             <h2 className="text-2xl lg:text-3xl font-serif font-bold text-white tracking-tight">
-              Pink Polo 2026 Invitational & Gala
+              Ghantoot Pink Polo Invitational & Gala
             </h2>
             <p className="text-xs lg:text-sm text-slate-300 leading-relaxed">
               Real-time monitoring console for guest approvals, verified QR entry passes, and Gate 1–4 turnstile check-ins.

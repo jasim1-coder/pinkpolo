@@ -87,6 +87,96 @@ async function startServer() {
     });
   });
 
+  // WhatsApp Cloud API Verify Number Endpoint
+  app.post('/api/verify-whatsapp', async (req: Request, res: Response) => {
+    try {
+      const { phone, name } = req.body || {};
+
+      if (!phone) {
+        res.status(400).json({ success: false, validWhatsApp: false, error: 'Phone number is required.' });
+        return;
+      }
+
+      const cleanPhone = String(phone).replace(/[^0-9]/g, '');
+      if (cleanPhone.length < 8) {
+        res.status(400).json({ success: false, validWhatsApp: false, error: 'Invalid phone number length.' });
+        return;
+      }
+
+      const apiVersion = process.env.WHATSAPP_API_VERSION || 'v22.0';
+      const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '974899072381634';
+      const accessToken =
+        process.env.WHATSAPP_ACCESS_TOKEN ||
+        'EAAW2JxtvKuYBRiimKqU3VTdNEu0qZAxvS2z5Ly7GxYLnrVc60eoJSq5P5ZBEsGq85ZAytBBjNoLBEg8fKRLkcXzz8GMd8NWrhK0SNKGmZBcfeOH2AWJ4Cxf4Ln0eeNhRy9VlUA4sYjv5xUdbxNACUMujdnwcH5blNZCOPWZBDiypYJbDHkoiSSsZBk3amEW1Yz5MAZDZD';
+
+      const verificationPayload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: cleanPhone,
+        type: 'text',
+        text: {
+          body: `🏇 *Ghantoot Racing & Polo Club*\n🎗️ *Pink Polo 2026 Registration*\n\nHello *${name || 'Guest'}*,\nThank you for submitting your registration request. We have verified your WhatsApp contact. Your official e-Pass will be delivered here once approved by the organizing committee.`,
+        },
+      };
+
+      const url = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
+
+      const metaRes = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(verificationPayload),
+      });
+
+      const metaData = await metaRes.json().catch(() => ({}));
+
+      if (!metaRes.ok) {
+        const errCode = (metaData as any)?.error?.code;
+        const errMsg = (metaData as any)?.error?.message || '';
+        console.warn('Meta WhatsApp Verification Warning:', metaData);
+
+        if (errCode === 131026 || errMsg.toLowerCase().includes('not a valid whatsapp') || errMsg.toLowerCase().includes('undeliverable')) {
+          res.status(200).json({
+            success: false,
+            validWhatsApp: false,
+            error: 'This phone number does not have an active WhatsApp account. Please enter a number with active WhatsApp.',
+          });
+          return;
+        }
+
+        if (errCode === 100 || errMsg.toLowerCase().includes('recipient')) {
+          res.status(200).json({
+            success: false,
+            validWhatsApp: false,
+            error: 'Invalid phone number format. Please ensure country code and mobile digits are correct.',
+          });
+          return;
+        }
+
+        res.status(200).json({
+          success: false,
+          validWhatsApp: false,
+          error: (metaData as any)?.error?.message || 'Could not verify WhatsApp account for this number.',
+          details: metaData,
+        });
+        return;
+      }
+
+      console.log(`[WhatsApp Verified] ${cleanPhone} is a valid WhatsApp user`);
+      res.status(200).json({
+        success: true,
+        validWhatsApp: true,
+        recipient: cleanPhone,
+        messageId: (metaData as any)?.messages?.[0]?.id,
+      });
+    } catch (err: any) {
+      console.error('WhatsApp verify exception:', err);
+      res.status(500).json({ success: false, validWhatsApp: false, error: err?.message || 'Server error verifying WhatsApp' });
+    }
+  });
+
   // WhatsApp Cloud API Send Message Endpoint
   app.post('/api/send-whatsapp', async (req: Request, res: Response) => {
     try {
@@ -111,14 +201,15 @@ async function startServer() {
 
       const captionBody =
         customMessage ||
-        `🎗️ *PINK POLO 2026 OFFICIAL ADMISSION PASS*\n\n` +
+        `🏇 *GHANTOOT RACING & POLO CLUB*\n` +
+          `🎗️ *PINK POLO 2026 OFFICIAL ADMISSION PASS*\n\n` +
           `Dear *${name || 'Guest'}*,\n\n` +
-          `Your registration for the *Pink Polo 2026 Charity Gala* has been *APPROVED*!\n\n` +
+          `Your registration for the *Pink Polo 2026 Invitational & Charity Gala* has been *APPROVED*!\n\n` +
           `🎟️ *Ticket Pass ID:* ${ticketId || 'PINK-2026'}\n` +
           `👑 *Experience Tier:* ${tier || 'VIP Access'}\n` +
           `🚪 *Designated Entrance:* ${gate || 'Gate 1 (Royal Pavilion Turnstile)'}\n` +
           `📅 *Event Dates:* Nov 20–22, 2026 (Gate Open: 14:00)\n` +
-          `📍 *Venue:* Al Rayyan Equestrian Grounds, Doha\n\n` +
+          `📍 *Venue:* Ghantoot Racing & Polo Club Grounds\n\n` +
           `📲 *Gate Entry Instructions:*\n` +
           `Present this attached QR barcode on your phone at your assigned gate turnstile for optical laser scan & VIP wristband issuance.`;
 

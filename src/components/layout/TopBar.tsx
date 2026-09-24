@@ -20,7 +20,6 @@ import {
   X,
   Smartphone,
 } from 'lucide-react';
-import adminAvatarImg from '../../assets/images/admin_avatar_1790157604248.jpg';
 
 interface TopBarProps {
   currentTab: NavTab;
@@ -106,7 +105,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
   return (
     <header className="h-16 px-3 sm:px-4 lg:px-6 bg-white border-b border-slate-200 flex items-center justify-between sticky top-0 z-30 min-w-0">
-      {/* Left: Mobile Toggle & Page Title */}
+      {/* Left: Mobile Toggle */}
       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         <button
           onClick={onOpenMobileSidebar}
@@ -115,19 +114,6 @@ export const TopBar: React.FC<TopBarProps> = ({
         >
           <Menu className="w-5 h-5" />
         </button>
-
-        <div className="min-w-0">
-          <div className="hidden xs:flex items-center gap-1.5 text-[11px] text-slate-400">
-            <span>Pink Polo 2026</span>
-            <span>/</span>
-            <span className="capitalize text-slate-600 font-medium truncate">
-              {currentTab === 'register' ? 'Guest Portal' : currentTab}
-            </span>
-          </div>
-          <h1 className="text-sm sm:text-base font-bold text-slate-900 leading-tight truncate max-w-[150px] xs:max-w-[220px] sm:max-w-xs md:max-w-none">
-            {getPageTitle(currentTab)}
-          </h1>
-        </div>
       </div>
 
       {/* Center: Desktop Search input */}
@@ -183,20 +169,6 @@ export const TopBar: React.FC<TopBarProps> = ({
           )}
         </div>
 
-        {/* Public Guest Registration Request Form Button (shown in admin views) */}
-        {currentTab !== 'register' && (
-          <button
-            type="button"
-            onClick={() => setCurrentTab('register')}
-            className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors shadow-2xs whitespace-nowrap bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 hover:border-rose-300"
-            title="Open the Public Attendee Registration Form"
-          >
-            <Send className="w-3.5 h-3.5 text-rose-600" />
-            <span className="hidden md:inline">Guest Form</span>
-            <span className="md:hidden">Form</span>
-          </button>
-        )}
-
         {/* Google Workspace Gmail Connection (shown in admin views) */}
         {currentTab !== 'register' && (
           hasGmailAuth ? (
@@ -225,20 +197,6 @@ export const TopBar: React.FC<TopBarProps> = ({
               className="py-1 px-2.5 text-xs hidden sm:inline-flex"
             />
           )
-        )}
-
-        {/* External PWA Integration Modal Trigger */}
-        {currentTab !== 'register' && (
-          <button
-            type="button"
-            onClick={() => setPwaModalOpen(true)}
-            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer border border-slate-700"
-            title="View PWA barcode camera scanner API, endpoint URL, and integration code"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <Smartphone className="w-3.5 h-3.5 text-rose-300" />
-            <span className="hidden md:inline">PWA Scanner API</span>
-          </button>
         )}
 
         {/* Notifications Dropdown */}
@@ -301,35 +259,26 @@ export const TopBar: React.FC<TopBarProps> = ({
           )}
         </div>
 
-        {/* Admin Profile */}
+        {/* Admin Staff Quick Switcher */}
         <div className="relative pl-1 border-l border-slate-200" ref={profileRef}>
           <button
             onClick={() => setProfileOpen(!profileOpen)}
-            className="flex items-center gap-2 p-1 hover:bg-slate-50 rounded-lg transition-colors"
+            className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+            title="Account Menu"
           >
-            <img
-              src={adminAvatarImg}
-              alt="Eleanor Vance"
-              referrerPolicy="no-referrer"
-              className="w-8 h-8 rounded-full object-cover border border-rose-200"
-            />
-            <div className="hidden xl:flex flex-col text-left">
-              <span className="text-xs font-semibold text-slate-900 leading-tight">
-                Eleanor Vance
-              </span>
-              <span className="text-[10px] text-slate-400">Chief Event Director</span>
+            <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+              <Shield className="w-4 h-4 text-rose-300" />
             </div>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden xl:block" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>
 
           {profileOpen && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in fade-in">
-              <div className="p-3.5 border-b border-slate-100 bg-slate-50">
-                <p className="text-xs font-bold text-slate-900">Eleanor Vance</p>
-                <p className="text-[11px] text-slate-500">e.vance@pinkpolo2026.qa</p>
-                <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 w-fit">
+            <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in fade-in">
+              <div className="p-3 border-b border-slate-100 bg-slate-50">
+                <p className="text-xs font-bold text-slate-900">Event Staff</p>
+                <div className="mt-1 flex items-center gap-1.5 text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 w-fit">
                   <Shield className="w-3 h-3 text-rose-600" />
-                  Super Admin
+                  Administrator
                 </div>
               </div>
               <div className="p-1 text-xs text-slate-700">
@@ -338,18 +287,18 @@ export const TopBar: React.FC<TopBarProps> = ({
                     setCurrentTab('dashboard');
                     setProfileOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded-lg"
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded-lg font-medium"
                 >
-                  Dashboard Overview
+                  Dashboard
                 </button>
                 <button
                   onClick={() => {
                     setCurrentTab('registrations');
                     setProfileOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded-lg"
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded-lg font-medium"
                 >
-                  Manage Registrations
+                  Registrations
                 </button>
               </div>
             </div>

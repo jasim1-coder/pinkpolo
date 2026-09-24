@@ -49,18 +49,21 @@ function buildHtmlPassEmail(params: SendTicketEmailParams): string {
           
           <!-- Header Banner -->
           <tr>
-            <td style="background-color: #090d16; padding: 36px 30px; text-align: center; border-bottom: 3px solid #e11d48;">
+            <td style="background-color: #090d16; padding: 32px 30px; text-align: center; border-bottom: 3px solid #e11d48;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                 <tr>
                   <td align="center">
-                    <span style="display: inline-block; background-color: #e11d48; color: #ffffff; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; padding: 5px 14px; border-radius: 999px; margin-bottom: 12px;">
+                    <div style="font-size: 13px; font-weight: 800; color: #fb7185; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px;">
+                      GHANTOOT RACING & POLO CLUB
+                    </div>
+                    <span style="display: inline-block; background-color: #e11d48; color: #ffffff; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; padding: 4px 14px; border-radius: 999px; margin-bottom: 12px;">
                       🎗️ Pink Polo 2026 Charity Gala
                     </span>
-                    <h1 style="margin: 0; color: #ffffff; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">
+                    <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">
                       Official Admission Pass
                     </h1>
                     <p style="margin: 6px 0 0 0; color: #94a3b8; font-size: 13px;">
-                      Nov 20–22, 2026 · Al Rayyan Grounds, Doha, Qatar
+                      Nov 20–22, 2026 · Ghantoot Racing & Polo Club Grounds
                     </p>
                   </td>
                 </tr>
@@ -157,11 +160,14 @@ function buildHtmlPassEmail(params: SendTicketEmailParams): string {
           <!-- Footer -->
           <tr>
             <td style="background-color: #f8fafc; padding: 20px 30px; text-align: center; border-top: 1px solid #e2e8f0;">
-              <p style="margin: 0 0 6px 0; font-size: 12px; font-weight: 700; color: #475569;">
-                Pink Polo 2026 Executive Committee
+              <p style="margin: 0 0 4px 0; font-size: 13px; font-weight: 800; color: #1e293b;">
+                GHANTOOT RACING & POLO CLUB · نادي غنتوت لسباق الخيل والبولو
+              </p>
+              <p style="margin: 0 0 6px 0; font-size: 12px; font-weight: 700; color: #e11d48;">
+                Pink Polo 2026 Organizing Committee
               </p>
               <p style="margin: 0; font-size: 11px; color: #94a3b8;">
-                Supporting Breast Cancer Awareness & Equestrian Sports · Doha, Qatar
+                Supporting Breast Cancer Awareness & Equestrian Excellence
               </p>
             </td>
           </tr>

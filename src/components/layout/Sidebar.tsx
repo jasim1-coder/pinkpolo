@@ -13,6 +13,8 @@ import {
   Smartphone,
 } from 'lucide-react';
 
+import ghantootLogo from '../../assets/images/ghantoot_polo_logo.png';
+
 export type NavTab = 'dashboard' | 'registrations' | 'tickets' | 'checkin' | 'register' | 'analytics';
 
 interface SidebarProps {
@@ -88,19 +90,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }`}
       >
         {/* Brand Lockup */}
-        <div className="h-16 px-6 border-b border-slate-100 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-600 to-rose-400 flex items-center justify-center text-white shadow-xs">
-            <span className="font-serif font-bold text-lg">P</span>
-          </div>
-          <div className="flex flex-col">
-            <div className="flex items-center gap-1.5">
-              <span className="text-base font-bold text-slate-900 tracking-tight">Pink Polo</span>
-              <span className="text-xs font-mono font-bold text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded">
-                2026
-              </span>
-            </div>
-            <span className="text-[11px] text-slate-400 font-medium">Executive Admin Portal</span>
-          </div>
+        <div className="h-18 px-4 border-b border-slate-100 flex items-center justify-center bg-white">
+          <img
+            src={ghantootLogo}
+            alt="Ghantoot Racing & Polo Club"
+            className="h-11 w-auto object-contain"
+          />
         </div>
 
         {/* Navigation Items */}

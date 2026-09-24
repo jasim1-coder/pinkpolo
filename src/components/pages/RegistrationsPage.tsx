@@ -26,6 +26,8 @@ import {
   Share2,
 } from 'lucide-react';
 
+import { sendWhatsAppTicketPass, getGateForTier } from '../../services/whatsappService';
+
 interface RegistrationsPageProps {
   onOpenRegisterForm?: () => void;
 }
@@ -48,6 +50,36 @@ export const RegistrationsPage: React.FC<RegistrationsPageProps> = ({ onOpenRegi
     signInWithGoogle,
     openEmailConfirmation,
   } = useGmail();
+
+  const [sendingWhatsAppId, setSendingWhatsAppId] = useState<string | null>(null);
+
+  const handleDirectSendWhatsApp = async (reg: Registration) => {
+    if (!reg.whatsapp) {
+      addToast('warning', 'No Phone Number', `No WhatsApp phone number on file for ${reg.name}.`);
+      return;
+    }
+    setSendingWhatsAppId(reg.id);
+    addToast('info', 'Sending WhatsApp Pass...', `Dispatching official pass to ${reg.whatsapp} via Meta Cloud API...`);
+    try {
+      const res = await sendWhatsAppTicketPass({
+        toPhone: reg.whatsapp,
+        attendeeName: reg.name,
+        ticketId: reg.ticketId || reg.id,
+        tier: reg.tier,
+        gate: getGateForTier(reg.tier),
+        qrValue: reg.qrValue || `PINK-POLO-2026-${reg.ticketId || reg.id}`,
+      });
+      if (res.success) {
+        addToast('success', 'WhatsApp Pass Dispatched!', `Official QR pass sent directly to ${reg.whatsapp}`);
+      } else {
+        addToast('error', 'WhatsApp Dispatch Error', res.error || 'Failed to dispatch via WhatsApp Cloud API');
+      }
+    } catch (err: any) {
+      addToast('error', 'WhatsApp Dispatch Failed', err?.message || 'Server error');
+    } finally {
+      setSendingWhatsAppId(null);
+    }
+  };
 
   // Filters & Search
   const [search, setSearch] = useState('');
@@ -435,18 +467,15 @@ export const RegistrationsPage: React.FC<RegistrationsPageProps> = ({ onOpenRegi
                             <>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  const cleanPhone = (reg.whatsapp || '').replace(/[^0-9]/g, '');
-                                  const msg = encodeURIComponent(
-                                    `*Pink Polo 2026 E-Pass Approved*\n\nDear ${reg.name},\nYour registration (${reg.id}) has been APPROVED!\nTicket ID: ${reg.ticketId}\nTier: ${reg.tier}\n\nPresent your verified QR barcode at the gate for fast entry.`
-                                  );
-                                  window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${msg}`, '_blank');
-                                }}
-                                className="p-1.5 text-emerald-700 hover:bg-emerald-50 border border-emerald-200 rounded-lg transition-colors inline-flex items-center gap-1 text-xs cursor-pointer"
-                                title={`Send pass to ${reg.whatsapp} via WhatsApp`}
+                                disabled={sendingWhatsAppId === reg.id}
+                                onClick={() => handleDirectSendWhatsApp(reg)}
+                                className="p-1.5 text-emerald-700 hover:bg-emerald-50 border border-emerald-200 rounded-lg transition-colors inline-flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
+                                title={`Send official QR admission pass to ${reg.whatsapp} via WhatsApp Cloud API`}
                               >
                                 <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
-                                <span className="hidden xl:inline text-[11px] font-medium text-emerald-800">WhatsApp</span>
+                                <span className="hidden xl:inline text-[11px] font-medium text-emerald-800">
+                                  {sendingWhatsAppId === reg.id ? 'Sending...' : 'WhatsApp'}
+                                </span>
                               </button>
 
                               <button

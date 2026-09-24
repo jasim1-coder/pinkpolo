@@ -18,7 +18,6 @@ export interface WhatsAppResponse {
   messageId?: string;
   error?: string;
   recipient?: string;
-  fallbackUrl?: string;
 }
 
 /**
@@ -37,24 +36,10 @@ export function getGateForTier(tier: string): string {
 export async function sendWhatsAppTicketPass(params: SendWhatsAppTicketParams): Promise<WhatsAppResponse> {
   const cleanPhone = (params.toPhone || '').replace(/[^0-9]/g, '');
 
-  const fallbackMsg = encodeURIComponent(
-    `*Pink Polo 2026 Official Admission Pass*\n\n` +
-      `Dear ${params.attendeeName},\n` +
-      `Your registration for the Pink Polo 2026 Charity Gala has been *APPROVED*!\n\n` +
-      `🎟️ *Ticket Pass ID:* ${params.ticketId}\n` +
-      `👑 *Experience Tier:* ${params.tier}\n` +
-      `🚪 *Assigned Gate:* ${params.gate}\n` +
-      `📅 *Dates:* Nov 20–22, 2026 (14:00 Daily)\n` +
-      `📍 *Venue:* Al Rayyan Grounds, Doha\n\n` +
-      `Present your verified digital QR barcode at your gate turnstile for fast-track VIP wristband entry.`
-  );
-  const fallbackUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${fallbackMsg}`;
-
   if (!cleanPhone) {
     return {
       success: false,
       error: 'Invalid or missing phone number.',
-      fallbackUrl,
     };
   }
 
@@ -83,7 +68,6 @@ export async function sendWhatsAppTicketPass(params: SendWhatsAppTicketParams): 
         success: false,
         error: data?.error || `Failed with HTTP status ${response.status}`,
         recipient: cleanPhone,
-        fallbackUrl,
       };
     }
 
@@ -91,7 +75,6 @@ export async function sendWhatsAppTicketPass(params: SendWhatsAppTicketParams): 
       success: true,
       messageId: data.messageId,
       recipient: cleanPhone,
-      fallbackUrl,
     };
   } catch (err: any) {
     console.error('WhatsApp API Network Exception:', err);
@@ -99,7 +82,49 @@ export async function sendWhatsAppTicketPass(params: SendWhatsAppTicketParams): 
       success: false,
       error: err?.message || 'Network communication error',
       recipient: cleanPhone,
-      fallbackUrl,
     };
   }
 }
+
+/**
+ * Checks whether a phone number is registered on WhatsApp Cloud API
+ */
+export async function verifyWhatsAppNumber(phone: string, name?: string): Promise<{
+  valid: boolean;
+  error?: string;
+  recipient?: string;
+}> {
+  const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
+  if (!cleanPhone || cleanPhone.length < 8) {
+    return { valid: false, error: 'Please enter a valid phone number with country code.' };
+  }
+
+  try {
+    const response = await fetch('/api/verify-whatsapp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ phone: cleanPhone, name }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok || !data.validWhatsApp) {
+      return {
+        valid: false,
+        error: data.error || 'This phone number does not have an active WhatsApp account. Please check your number.',
+      };
+    }
+
+    return {
+      valid: true,
+      recipient: cleanPhone,
+    };
+  } catch (err: any) {
+    console.error('WhatsApp verify network error:', err);
+    // On unexpected network failures, allow graceful fallback
+    return { valid: true, recipient: cleanPhone };
+  }
+}
+

@@ -38,14 +38,15 @@ export default async function handler(req, res) {
 
     const captionBody =
       customMessage ||
-      `🎗️ *PINK POLO 2026 OFFICIAL ADMISSION PASS*\n\n` +
+      `🏇 *GHANTOOT RACING & POLO CLUB*\n` +
+        `🎗️ *PINK POLO 2026 OFFICIAL ADMISSION PASS*\n\n` +
         `Dear *${name || 'Guest'}*,\n\n` +
-        `Your registration for the *Pink Polo 2026 Charity Gala* has been *APPROVED*!\n\n` +
+        `Your registration for the *Pink Polo 2026 Invitational & Charity Gala* has been *APPROVED*!\n\n` +
         `🎟️ *Ticket ID:* ${ticketId || 'PINK-2026'}\n` +
         `👑 *Experience Tier:* ${tier || 'VIP Access'}\n` +
         `🚪 *Designated Entrance:* ${gate || 'Gate 1 (Royal Pavilion Turnstile)'}\n` +
         `📅 *Event Dates:* Nov 20–22, 2026 (Gate Open: 14:00)\n` +
-        `📍 *Venue:* Al Rayyan Equestrian Grounds, Doha\n\n` +
+        `📍 *Venue:* Ghantoot Racing & Polo Club Grounds\n\n` +
         `📲 *Gate Entry Instructions:*\n` +
         `Present this attached QR barcode on your phone at your assigned gate turnstile for optical laser scan & VIP wristband issuance.`;
 

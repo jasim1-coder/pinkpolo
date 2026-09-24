@@ -19,6 +19,8 @@ import {
   Send,
   MessageSquare,
 } from 'lucide-react';
+import { sendWhatsAppTicketPass, getGateForTier } from '../../services/whatsappService';
+import ghantootLogo from '../../assets/images/ghantoot_polo_logo.png';
 import confetti from 'canvas-confetti';
 
 export const RegistrationDetailModal: React.FC = () => {
@@ -29,12 +31,14 @@ export const RegistrationDetailModal: React.FC = () => {
     approveRegistration,
     rejectRegistration,
     setSelectedTicketPass,
+    addToast,
   } = useEvent();
 
   const { openEmailConfirmation, hasGmailAuth } = useGmail();
 
   const [rejectPromptOpen, setRejectPromptOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('Capacity limit reached for selected afternoon session slot');
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
 
   if (!selectedRegistration) return null;
 
@@ -59,12 +63,32 @@ export const RegistrationDetailModal: React.FC = () => {
     setSelectedTicketPass(reg);
   };
 
-  const handleWhatsAppShare = () => {
-    const cleanPhone = (reg.whatsapp || '').replace(/[^0-9]/g, '');
-    const msg = encodeURIComponent(
-      `*Pink Polo 2026 E-Pass Approved*\n\nDear ${reg.name},\nYour registration (${reg.id}) has been APPROVED!\nTicket ID: ${reg.ticketId}\nTier: ${reg.tier}\n\nPresent your verified QR barcode at the gate for fast check-in.\nSee you at Al Rayyan Grounds!`
-    );
-    window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${msg}`, '_blank');
+  const handleWhatsAppShare = async () => {
+    if (!reg.whatsapp) {
+      addToast('warning', 'Missing Phone Number', 'No WhatsApp number on file for this attendee.');
+      return;
+    }
+    setIsSendingWhatsApp(true);
+    addToast('info', 'Sending WhatsApp Pass...', `Dispatching QR pass to ${reg.whatsapp} via Meta Cloud API...`);
+    try {
+      const res = await sendWhatsAppTicketPass({
+        toPhone: reg.whatsapp,
+        attendeeName: reg.name,
+        ticketId: reg.ticketId || reg.id,
+        tier: reg.tier,
+        gate: getGateForTier(reg.tier),
+        qrValue: reg.qrValue || `PINK-POLO-2026-${reg.ticketId || reg.id}`,
+      });
+      if (res.success) {
+        addToast('success', 'WhatsApp Pass Dispatched!', `QR admission pass sent directly to ${reg.whatsapp}`);
+      } else {
+        addToast('error', 'WhatsApp Dispatch Error', res.error || 'Failed to dispatch via WhatsApp Cloud API');
+      }
+    } catch (e: any) {
+      addToast('error', 'WhatsApp Exception', e?.message || 'Error communicating with WhatsApp API.');
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
   };
 
   return (
@@ -73,21 +97,25 @@ export const RegistrationDetailModal: React.FC = () => {
         className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header with Pink Polo Accent */}
-        <div className="relative px-6 py-5 bg-gradient-to-r from-rose-900 via-rose-800 to-slate-900 text-white flex items-center justify-between">
+        {/* Header with Ghantoot Polo Accent */}
+        <div className="relative px-6 py-4 bg-gradient-to-r from-rose-950 via-rose-900 to-slate-950 text-white flex items-center justify-between border-b border-rose-800/40">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-400/30 flex items-center justify-center text-rose-300">
-              <Ticket className="w-5 h-5" />
+            <div className="bg-white/95 rounded-xl p-1.5 shadow-sm shrink-0 border border-white/40">
+              <img
+                src={ghantootLogo}
+                alt="Ghantoot Racing & Polo Club"
+                className="h-8 w-auto object-contain"
+              />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono tracking-wider text-rose-300 uppercase">
+                <span className="text-[11px] font-mono tracking-wider text-rose-300 uppercase">
                   {reg.id}
                 </span>
                 <span className="text-slate-400">·</span>
-                <span className="text-xs text-rose-200 font-medium">Pink Polo 2026</span>
+                <span className="text-[11px] text-rose-200 font-medium">Ghantoot Pink Polo 2026</span>
               </div>
-              <h2 className="text-lg font-bold text-white tracking-tight">{reg.name}</h2>
+              <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">{reg.name}</h2>
             </div>
           </div>
 
