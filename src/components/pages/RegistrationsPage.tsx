@@ -15,7 +15,6 @@ import {
   Eye,
   Check,
   X,
-  UserPlus,
   Download,
   Calendar,
   Sparkles,
@@ -39,7 +38,6 @@ export const RegistrationsPage: React.FC<RegistrationsPageProps> = ({ onOpenRegi
     rejectRegistration,
     setSelectedRegistration,
     setSelectedTicketPass,
-    simulateNewRegistration,
     addToast,
   } = useEvent();
 
@@ -201,15 +199,6 @@ export const RegistrationsPage: React.FC<RegistrationsPageProps> = ({ onOpenRegi
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
             <span>Export CSV</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={simulateNewRegistration}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 active:scale-[0.98] rounded-xl shadow-xs transition-all whitespace-nowrap"
-          >
-            <UserPlus className="w-3.5 h-3.5 text-rose-200" />
-            <span>Simulate New Registration</span>
           </button>
         </div>
       </div>
