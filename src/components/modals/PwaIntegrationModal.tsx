@@ -54,7 +54,14 @@ export const PwaIntegrationModal: React.FC = () => {
         }),
       });
 
-      const data = await res.json();
+      let data: any;
+      const text = await res.text();
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { message: text || `HTTP ${res.status} response from server`, raw: text };
+      }
+
       setTestResponse({
         httpStatus: res.status,
         body: data,
@@ -62,7 +69,7 @@ export const PwaIntegrationModal: React.FC = () => {
     } catch (err: any) {
       setTestResponse({
         httpStatus: 0,
-        body: { error: err.message || 'Network error' },
+        body: { error: err.message || 'Network error communicating with /api/check-in' },
       });
     } finally {
       setIsTesting(false);

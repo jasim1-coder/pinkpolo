@@ -1,10 +1,26 @@
 import { store } from './_store.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, doc, updateDoc } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
+const firebaseConfig = {
+  projectId: "gen-lang-client-0542593931",
+  appId: "1:137410033238:web:0235016ef24f0ac2f2adf7",
+  apiKey: "AIzaSyDJKsstF4O4s0fbBE-k0IhA5M_jV6Ft4t8",
+  authDomain: "gen-lang-client-0542593931.firebaseapp.com",
+  storageBucket: "gen-lang-client-0542593931.firebasestorage.app",
+  messagingSenderId: "137410033238",
+  measurementId: "",
+  oAuthClientId: "137410033238-l5jha1g8s6clag31jhlnoaq1s84mo79n.apps.googleusercontent.com",
+  recaptchaSiteKey: ""
+};
+
+let db = null;
+try {
+  const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+  db = getFirestore(app);
+} catch (err) {
+  console.warn('Firebase init warning:', err);
+}
 
 async function getRequestBody(req) {
   if (req.body) {
@@ -47,23 +63,24 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const queryParams = req.query || {};
-  const body = await getRequestBody(req);
+  try {
+    const queryParams = req.query || {};
+    const body = await getRequestBody(req);
 
-  const rawInput = String(
-    body.qrData || body.ticketId || body.code || body.id || queryParams.qrData || queryParams.ticketId || queryParams.code || queryParams.id || ''
-  ).trim();
+    const rawInput = String(
+      body.qrData || body.ticketId || body.code || body.id || queryParams.qrData || queryParams.ticketId || queryParams.code || queryParams.id || ''
+    ).trim();
 
-  const gate = String(body.gate || queryParams.gate || 'Main Gate Turnstile');
-  const scannedBy = String(body.scannedBy || queryParams.scannedBy || 'External Scanner App');
+    const gate = String(body.gate || queryParams.gate || 'Main Gate Turnstile');
+    const scannedBy = String(body.scannedBy || queryParams.scannedBy || 'External Scanner App');
 
-  if (!rawInput) {
-    return res.status(400).json({
-      success: false,
-      status: 'invalid',
-      message: 'Missing ticketId or qrData in request. Please provide ticketId or qrData parameter.',
-    });
-  }
+    if (!rawInput) {
+      return res.status(400).json({
+        success: false,
+        status: 'invalid',
+        message: 'Missing ticketId or qrData in request. Please provide ticketId or qrData parameter.',
+      });
+    }
 
   const queryUpper = rawInput.toUpperCase();
   const timeFormatted = new Date().toLocaleTimeString('en-US', {
@@ -249,18 +266,27 @@ export default async function handler(req, res) {
   };
   store.activities.unshift(activity);
 
-  return res.status(200).json({
-    success: true,
-    status: 'valid',
-    message: `PASS VERIFIED: Welcome, ${updated.name}! Access granted for ${updated.tier}.`,
-    guestName: updated.name,
-    guestEmail: updated.email,
-    ticketId: updated.ticketId,
-    tier: updated.tier,
-    ticketStatus: 'Checked In',
-    checkInStatus: 'Checked In',
-    attendee: updated,
-    gate,
-    scannedAt: timeFormatted,
-  });
+    return res.status(200).json({
+      success: true,
+      status: 'valid',
+      message: `PASS VERIFIED: Welcome, ${updated.name}! Access granted for ${updated.tier}.`,
+      guestName: updated.name,
+      guestEmail: updated.email,
+      ticketId: updated.ticketId,
+      tier: updated.tier,
+      ticketStatus: 'Checked In',
+      checkInStatus: 'Checked In',
+      attendee: updated,
+      gate,
+      scannedAt: timeFormatted,
+    });
+  } catch (err) {
+    console.error('Serverless check-in exception:', err);
+    return res.status(500).json({
+      success: false,
+      status: 'invalid',
+      message: `Server check-in error: ${err?.message || err}`,
+      scannedAt: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    });
+  }
 }
