@@ -6,16 +6,14 @@ import {
   Ticket,
   QrCode,
   BarChart3,
-  Settings,
   Sparkles,
   Calendar,
   Layers,
   ChevronRight,
-  Send,
   Smartphone,
 } from 'lucide-react';
 
-export type NavTab = 'dashboard' | 'registrations' | 'tickets' | 'checkin' | 'register' | 'analytics' | 'settings';
+export type NavTab = 'dashboard' | 'registrations' | 'tickets' | 'checkin' | 'register' | 'analytics';
 
 interface SidebarProps {
   currentTab: NavTab;
@@ -61,22 +59,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'bg-rose-100 text-rose-700 font-semibold',
     },
     {
-      id: 'register' as NavTab,
-      label: 'Submit Request (Guest Form)',
-      icon: Send,
-      badge: 'Public UI',
-      badgeColor: 'bg-rose-100 text-rose-700 font-bold',
-    },
-    {
       id: 'analytics' as NavTab,
       label: 'Analytics',
       icon: BarChart3,
-      badge: null,
-    },
-    {
-      id: 'settings' as NavTab,
-      label: 'Settings',
-      icon: Settings,
       badge: null,
     },
   ];

@@ -141,6 +141,51 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
 
   const maxVal = Math.max(1, ...timelineDays.map((d) => d.count));
 
+  // Dynamically compute daily turnstile attendance & check-ins per event date
+  const dailyCheckIns = useMemo(() => {
+    const today = new Date();
+    const days: {
+      dayLabel: string;
+      dateStr: string;
+      checkedInCount: number;
+      gate1Count: number;
+      gate2Count: number;
+      gate3Count: number;
+      gate4Count: number;
+    }[] = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const isoDateStr = d.toISOString().slice(0, 10);
+      const dayLabel = i === 0 ? 'Today' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+      // Find all attendees who checked in on this date
+      const checkedOnDay = registrations.filter(
+        (r) => r.checkedIn && r.checkedInAt && r.checkedInAt.startsWith(isoDateStr)
+      );
+
+      const g1 = checkedOnDay.filter((r) => r.scannedGate?.includes('Gate 1') || r.tier === 'VIP Pavilion').length;
+      const g2 = checkedOnDay.filter((r) => r.scannedGate?.includes('Gate 2') || r.tier === 'Clubhouse Lounge').length;
+      const g3 = checkedOnDay.filter((r) => r.scannedGate?.includes('Gate 3') || r.tier === 'Garden Terrace').length;
+      const g4 = checkedOnDay.filter((r) => r.scannedGate?.includes('Gate 4') || r.tier === 'Grandstand').length;
+
+      days.push({
+        dayLabel,
+        dateStr: isoDateStr,
+        checkedInCount: checkedOnDay.length,
+        gate1Count: g1,
+        gate2Count: g2,
+        gate3Count: g3,
+        gate4Count: g4,
+      });
+    }
+
+    return days;
+  }, [registrations]);
+
+  const maxCheckInDay = Math.max(1, ...dailyCheckIns.map((d) => d.checkedInCount));
+
   return (
     <div className="space-y-6">
       {/* Hero Event Banner Card */}
@@ -423,6 +468,126 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
                   : 'Live registration tracking initialized'}
               </span>
               <span className="font-mono text-[11px] text-slate-400">Database synchronized</span>
+            </div>
+          </div>
+
+          {/* Report 3: SEPARATE GATE ATTENDANCE & CHECK-IN REPORT BY DATE */}
+          <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-sky-100 text-sky-800 border border-sky-200">
+                    Turnstile Attendance Report
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-mono">Live Gates 1–4</span>
+                </div>
+                <h3 className="text-sm font-bold text-slate-900 mt-1">
+                  Checked-In Attendees by Event Date
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-xl text-xs flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-sky-600" />
+                  <span>Total Admitted: <strong className="font-mono text-slate-900">{formatNum(stats.checkedIn)}</strong></span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab('checkin')}
+                  className="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-semibold transition-colors"
+                >
+                  Open Scanner →
+                </button>
+              </div>
+            </div>
+
+            {/* Visual Date-by-Date Attendance Histogram */}
+            <div className="space-y-3">
+              <div className="grid grid-cols-7 gap-2 pt-2">
+                {dailyCheckIns.map((day, idx) => {
+                  const checkInPct = maxCheckInDay > 0 ? Math.round((day.checkedInCount / maxCheckInDay) * 100) : 0;
+                  const isToday = day.dayLabel === 'Today';
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`p-2.5 rounded-xl border flex flex-col justify-between text-center transition-all ${
+                        isToday
+                          ? 'bg-sky-50/70 border-sky-300 ring-1 ring-sky-300/60 shadow-2xs'
+                          : 'bg-slate-50 border-slate-200/80 hover:bg-slate-100/70'
+                      }`}
+                    >
+                      <span className="text-[11px] font-bold text-slate-700 block truncate">
+                        {day.dayLabel}
+                      </span>
+                      <span className="text-[9px] text-slate-400 font-mono block">
+                        {day.dateStr.slice(5)}
+                      </span>
+
+                      {/* Mini Bar Meter */}
+                      <div className="h-14 w-full bg-slate-200/60 rounded-lg my-1.5 flex items-end justify-center p-1 overflow-hidden">
+                        <div
+                          style={{ height: `${Math.max(8, checkInPct)}%` }}
+                          className={`w-full rounded-md transition-all duration-500 ${
+                            day.checkedInCount > 0
+                              ? 'bg-sky-600 shadow-xs'
+                              : 'bg-slate-300'
+                          }`}
+                          title={`${day.dayLabel}: ${day.checkedInCount} attendees checked in`}
+                        />
+                      </div>
+
+                      <div className="font-mono font-bold text-xs text-slate-900">
+                        {day.checkedInCount}
+                        <span className="text-[9px] text-slate-400 font-normal block">attended</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Turnstile Gate Breakdown Strip for Recorded Check-ins */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-600 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-slate-500 block truncate">Gate 1 (Royal VIP)</span>
+                    <strong className="font-mono text-slate-900">
+                      {registrations.filter((r) => r.checkedIn && (r.scannedGate?.includes('Gate 1') || r.tier === 'VIP Pavilion')).length} checked in
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-slate-500 block truncate">Gate 2 (Clubhouse)</span>
+                    <strong className="font-mono text-slate-900">
+                      {registrations.filter((r) => r.checkedIn && (r.scannedGate?.includes('Gate 2') || r.tier === 'Clubhouse Lounge')).length} checked in
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-slate-500 block truncate">Gate 3 (Terrace)</span>
+                    <strong className="font-mono text-slate-900">
+                      {registrations.filter((r) => r.checkedIn && (r.scannedGate?.includes('Gate 3') || r.tier === 'Garden Terrace')).length} checked in
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-sky-500 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-slate-500 block truncate">Gate 4 (Grandstand)</span>
+                    <strong className="font-mono text-slate-900">
+                      {registrations.filter((r) => r.checkedIn && (r.scannedGate?.includes('Gate 4') || r.tier === 'Grandstand')).length} checked in
+                    </strong>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

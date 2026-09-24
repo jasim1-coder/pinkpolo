@@ -31,10 +31,12 @@ import poloBannerImg from '../../assets/images/pink_polo_banner_1790157590237.jp
 import confetti from 'canvas-confetti';
 
 interface PublicRegistrationPortalProps {
-  // Public standalone portal
+  isStandalonePublic?: boolean;
 }
 
-export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> = () => {
+export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> = ({
+  isStandalonePublic = false,
+}) => {
   const {
     submitAttendeeRegistration,
     approveRegistration,
@@ -537,9 +539,149 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
             </form>
           </div>
         </div>
+      ) : isStandalonePublic ? (
+        /* ========================================================
+           STATE 2A: STANDALONE PUBLIC GUEST CONFIRMATION SCREEN
+           (Strictly for external attendees - No admin controls)
+           ======================================================== */
+        <div className="max-w-2xl mx-auto w-full py-4 px-2 space-y-4 animate-in fade-in zoom-in-95 duration-300">
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xl shadow-slate-200/50 overflow-hidden">
+            {/* Top Celebratory Header */}
+            <div className="bg-gradient-to-br from-slate-950 via-rose-950 to-slate-900 text-white p-6 sm:p-8 text-center relative overflow-hidden">
+              <div className="absolute inset-0 opacity-15">
+                <img
+                  src={poloBannerImg}
+                  alt="Pink Polo Background"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              <div className="relative z-10 flex flex-col items-center">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 flex items-center justify-center mb-4 shadow-lg shadow-emerald-950/40">
+                  <CheckCircle2 className="w-9 h-9 text-emerald-400" />
+                </div>
+
+                <span className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest bg-rose-600 text-white shadow-xs mb-2">
+                  Pink Polo 2026 • Registration Received
+                </span>
+
+                <h2 className="text-2xl sm:text-3xl font-serif font-bold text-white tracking-tight">
+                  Thank You, {liveReg.name}!
+                </h2>
+                <p className="text-sm text-slate-300 mt-2 max-w-md mx-auto leading-relaxed">
+                  Your registration request for the <strong className="text-rose-300">{liveReg.tier}</strong> experience has been successfully submitted to the organizing committee.
+                </p>
+              </div>
+            </div>
+
+            {/* Application Summary Card */}
+            <div className="p-6 sm:p-8 space-y-6">
+              <div className="bg-slate-50 rounded-2xl border border-slate-200/80 p-4 sm:p-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-200/60 pb-3">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Application Reference
+                  </span>
+                  <span className="text-xs font-mono font-bold bg-white px-2.5 py-1 rounded-md border border-slate-200 text-slate-900 shadow-2xs">
+                    {liveReg.id}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
+                  <div>
+                    <span className="text-slate-400 text-[11px] block">Guest Name</span>
+                    <strong className="text-slate-900 text-sm block truncate">{liveReg.name}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[11px] block">Experience Tier</span>
+                    <strong className="text-rose-600 text-sm block truncate">{liveReg.tier}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[11px] block">WhatsApp Contact</span>
+                    <span className="text-slate-800 font-mono font-medium block truncate">{liveReg.whatsapp}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[11px] block">Email Address</span>
+                    <span className="text-slate-800 font-mono font-medium block truncate">{liveReg.email}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[11px] block">Assigned Gate</span>
+                    <span className="text-slate-800 font-medium block truncate">{getGateForTier(liveReg.tier)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[11px] block">Event Dates</span>
+                    <span className="text-slate-800 font-medium block truncate">Nov 20–22, 2026</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* What Happens Next Timeline */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-rose-600" />
+                  <span>Next Steps & Pass Delivery</span>
+                </h4>
+
+                <div className="space-y-2.5 text-xs text-slate-600">
+                  <div className="flex items-start gap-3 p-3 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
+                    <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                      1
+                    </div>
+                    <div>
+                      <strong className="text-slate-900 block">Committee Review</strong>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Our guest committee validates seating allocations and hospitality credentials.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
+                    <div className="w-6 h-6 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                      2
+                    </div>
+                    <div>
+                      <strong className="text-slate-900 block">QR E-Pass Dispatch</strong>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Once approved, your official admission QR barcode and gate directions will be sent directly to your WhatsApp and Email.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
+                    <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                      3
+                    </div>
+                    <div>
+                      <strong className="text-slate-900 block">Fast-Track Entry at Al Rayyan Grounds</strong>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Present the digital QR pass from your smartphone at your designated gate turnstile for instant check-in.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Actions */}
+              <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={handleResetForm}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-sm transition-all"
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Submit Another Registration</span>
+                </button>
+
+                <p className="text-[11px] text-slate-400 text-center sm:text-right">
+                  Inquiries? Contact <span className="text-slate-600 font-mono">invitations@pinkpolo2026.qa</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : (
         /* ========================================================
-           STATE 2: SUBMITTED - CONFIRMATION & WHATSAPP/EMAIL PASS
+           STATE 2B: ADMIN PREVIEW & SIMULATION MODE
+           (Used only within the Admin Portal)
            ======================================================== */
         <div className="flex flex-col justify-start h-full space-y-3">
           {/* Top Compact Banner with Required Message */}
