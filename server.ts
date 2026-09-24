@@ -115,7 +115,7 @@ async function startServer() {
         to: cleanPhone,
         type: 'text',
         text: {
-          body: `🏇 *Ghantoot Racing & Polo Club*\n🎗️ *Pink Polo 2026 Registration*\n\nHello *${name || 'Guest'}*,\nThank you for submitting your registration request. We have verified your WhatsApp contact. Your official e-Pass will be delivered here once approved by the organizing committee.`,
+          body: `🏇 *GHANTOOT RACING & POLO CLUB*\n🎗️ *Pink Polo 2026 Registration*\n\nHello *${name || 'Guest'}*,\nThank you for submitting your registration request. We have verified your WhatsApp contact. Your official digital e-Pass will be delivered here once approved by the organizing committee.\n\n📍 *Venue:* Ghantoot Polo Grounds, Abu Dhabi\n📅 *Dates:* Nov 20–22, 2026`,
         },
       };
 
@@ -135,15 +135,15 @@ async function startServer() {
       if (!metaRes.ok) {
         const errCode = (metaData as any)?.error?.code;
         const errMsg = (metaData as any)?.error?.message || '';
-        console.warn('Meta WhatsApp Verification Warning:', metaData);
+        console.warn('Meta WhatsApp Verification Warning:', errCode, errMsg, metaData);
 
-        // Codes 131047 or 131051 prove the WhatsApp account exists on Meta servers
-        if (errCode === 131047 || errCode === 131051 || errCode === 131030) {
+        // Code 131047 proves the WhatsApp account exists on Meta servers
+        if (errCode === 131047) {
           res.status(200).json({
             success: true,
             validWhatsApp: true,
             recipient: cleanPhone,
-            note: 'Verified WhatsApp user (outside 24h window).',
+            note: 'Verified WhatsApp user account.',
           });
           return;
         }
@@ -153,6 +153,16 @@ async function startServer() {
           validWhatsApp: false,
           error: 'This phone number does not have an active WhatsApp account. Please enter a valid number with active WhatsApp.',
           details: metaData,
+        });
+        return;
+      }
+
+      if ((metaData as any)?.messages && (metaData as any).messages.length > 0) {
+        res.status(200).json({
+          success: true,
+          validWhatsApp: true,
+          recipient: cleanPhone,
+          messageId: (metaData as any).messages[0].id,
         });
         return;
       }
