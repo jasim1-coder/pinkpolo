@@ -82,16 +82,17 @@ export default async function handler(req, res) {
       });
     }
 
-  const now = new Date();
-  const todayDateStr = now.toISOString().slice(0, 10);
-  const timeFormatted = now.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-  const nowIso = now.toISOString().replace('T', ' ').substring(0, 16);
+    const now = new Date();
+    const todayDateStr = now.toISOString().slice(0, 10);
+    const timeFormatted = now.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    const nowIso = now.toISOString().replace('T', ' ').substring(0, 16);
 
-  const digitsOnly = queryUpper.replace(/[^0-9]/g, '');
+    const queryUpper = rawInput.toUpperCase();
+    const digitsOnly = queryUpper.replace(/[^0-9]/g, '');
 
   let jsonTicketId = '';
   let jsonRegId = '';
