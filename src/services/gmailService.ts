@@ -240,3 +240,5 @@ export async function sendRealApprovalEmail(params: SendTicketEmailParams): Prom
     };
   }
 }
+
+export const sendTicketEmailViaGmail = sendRealApprovalEmail;

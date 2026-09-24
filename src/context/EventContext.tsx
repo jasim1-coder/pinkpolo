@@ -8,6 +8,8 @@ import {
   checkInAttendeeInFirestore,
   logActivityToFirestore,
 } from '../services/firebaseDb';
+import { sendWhatsAppTicketPass, getGateForTier } from '../services/whatsappService';
+import { sendTicketEmailViaGmail } from '../services/gmailService';
 
 export interface ScanResult {
   status: 'valid' | 'already_used' | 'invalid';
@@ -503,6 +505,40 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     logActivityToFirestore(ticketAct);
 
     addToast('success', 'Registration approved & ticket generated', `Ticket ID: ${ticketId} issued for ${reg.name}`);
+
+    // Automatically Dispatch WhatsApp Official E-Pass with attached QR
+    if (updatedReg.whatsapp) {
+      sendWhatsAppTicketPass({
+        toPhone: updatedReg.whatsapp,
+        attendeeName: updatedReg.name,
+        ticketId: updatedReg.ticketId!,
+        tier: updatedReg.tier,
+        gate: getGateForTier(updatedReg.tier),
+        qrValue: updatedReg.qrValue || `PINK-POLO-2026-${updatedReg.ticketId}`,
+      }).then((res) => {
+        if (res.success) {
+          addToast('success', 'WhatsApp Pass Dispatched', `QR admission pass sent to ${updatedReg.whatsapp}`);
+        } else {
+          console.log('[WhatsApp Dispatch Info]', res.error);
+        }
+      }).catch((e) => console.error('WhatsApp dispatch error:', e));
+    }
+
+    // Automatically Dispatch Official HTML Pass via Gmail API (if connected)
+    if (updatedReg.email) {
+      sendTicketEmailViaGmail({
+        toEmail: updatedReg.email,
+        attendeeName: updatedReg.name,
+        ticketId: updatedReg.ticketId!,
+        tier: updatedReg.tier,
+        assignedGate: getGateForTier(updatedReg.tier),
+        qrValue: updatedReg.qrValue || `PINK-POLO-2026-${updatedReg.ticketId}`,
+      }).then((res) => {
+        if (res.success) {
+          addToast('success', 'Email Pass Sent via Gmail', `Official pass delivered to ${updatedReg.email}`);
+        }
+      }).catch((e) => console.error('Email dispatch error:', e));
+    }
 
     // Sync to server API
     fetch('/api/sync', {

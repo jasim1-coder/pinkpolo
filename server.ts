@@ -2,8 +2,11 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 import { Registration, ActivityItem, DashboardStats } from './src/types';
 import { checkInAttendeeInFirestore } from './src/services/firebaseDb';
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -82,6 +85,115 @@ async function startServer() {
       },
       responseStatuses: ['valid', 'already_used', 'invalid'],
     });
+  });
+
+  // WhatsApp Cloud API Send Message Endpoint
+  app.post('/api/send-whatsapp', async (req: Request, res: Response) => {
+    try {
+      const { to, name, ticketId, tier, gate, qrValue, customMessage } = req.body || {};
+
+      if (!to) {
+        res.status(400).json({ success: false, error: 'Recipient phone number is required' });
+        return;
+      }
+
+      const cleanPhone = String(to).replace(/[^0-9]/g, '');
+      const apiVersion = process.env.WHATSAPP_API_VERSION || 'v22.0';
+      const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '974899072381634';
+      const accessToken =
+        process.env.WHATSAPP_ACCESS_TOKEN ||
+        'EAAW2JxtvKuYBRiimKqU3VTdNEu0qZAxvS2z5Ly7GxYLnrVc60eoJSq5P5ZBEsGq85ZAytBBjNoLBEg8fKRLkcXzz8GMd8NWrhK0SNKGmZBcfeOH2AWJ4Cxf4Ln0eeNhRy9VlUA4sYjv5xUdbxNACUMujdnwcH5blNZCOPWZBDiypYJbDHkoiSSsZBk3amEW1Yz5MAZDZD';
+
+      const rawQr = qrValue || `PINK-POLO-2026-${ticketId || 'PASS'}`;
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=15&data=${encodeURIComponent(
+        rawQr
+      )}`;
+
+      const captionBody =
+        customMessage ||
+        `🎗️ *PINK POLO 2026 OFFICIAL ADMISSION PASS*\n\n` +
+          `Dear *${name || 'Guest'}*,\n\n` +
+          `Your registration for the *Pink Polo 2026 Charity Gala* has been *APPROVED*!\n\n` +
+          `🎟️ *Ticket Pass ID:* ${ticketId || 'PINK-2026'}\n` +
+          `👑 *Experience Tier:* ${tier || 'VIP Access'}\n` +
+          `🚪 *Designated Entrance:* ${gate || 'Gate 1 (Royal Pavilion Turnstile)'}\n` +
+          `📅 *Event Dates:* Nov 20–22, 2026 (Gate Open: 14:00)\n` +
+          `📍 *Venue:* Al Rayyan Equestrian Grounds, Doha\n\n` +
+          `📲 *Gate Entry Instructions:*\n` +
+          `Present this attached QR barcode on your phone at your assigned gate turnstile for optical laser scan & VIP wristband issuance.`;
+
+      // Try sending as high-resolution QR Image with caption first
+      const imagePayload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: cleanPhone,
+        type: 'image',
+        image: {
+          link: qrImageUrl,
+          caption: captionBody,
+        },
+      };
+
+      const url = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
+
+      let metaRes = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(imagePayload),
+      });
+
+      let metaData = await metaRes.json().catch(() => ({}));
+
+      // Fallback to text payload if image is rejected
+      if (!metaRes.ok) {
+        console.warn('Meta Image message failed, retrying with text payload:', metaData);
+        const textPayload = {
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: cleanPhone,
+          type: 'text',
+          text: {
+            preview_url: true,
+            body: `${captionBody}\n\n🔗 *QR Pass Image:* ${qrImageUrl}`,
+          },
+        };
+
+        metaRes = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(textPayload),
+        });
+
+        metaData = await metaRes.json().catch(() => ({}));
+      }
+
+      if (!metaRes.ok) {
+        console.error('Meta WhatsApp Cloud API Error:', metaData);
+        res.status(metaRes.status || 500).json({
+          success: false,
+          error: (metaData as any)?.error?.message || 'Failed to dispatch WhatsApp message',
+          details: metaData,
+        });
+        return;
+      }
+
+      console.log(`[WhatsApp Sent] QR Pass ${ticketId} sent to ${cleanPhone}`);
+      res.status(200).json({
+        success: true,
+        messageId: (metaData as any)?.messages?.[0]?.id,
+        recipient: cleanPhone,
+        qrImageUrl,
+      });
+    } catch (err: any) {
+      console.error('WhatsApp Error:', err);
+      res.status(500).json({ success: false, error: err?.message || 'Server error' });
+    }
   });
 
   // Current state
