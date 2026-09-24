@@ -16,6 +16,8 @@ import {
   VolumeX,
   Smartphone,
   Radio,
+  Camera,
+  CameraOff,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -35,8 +37,97 @@ export const CheckInPage: React.FC = () => {
   const [selectedGate, setSelectedGate] = useState('Gate 1 - Royal Pavilion Entrance');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [isScanningAnimation, setIsScanningAnimation] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const streamRef = React.useRef<MediaStream | null>(null);
+  const scanIntervalRef = React.useRef<any>(null);
 
   const approvedList = registrations.filter((r) => r.status === 'Approved' && r.ticketId);
+
+  // Live Camera Scanner Toggle
+  const startCamera = async () => {
+    setCameraError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+      setCameraActive(true);
+
+      // Start BarcodeDetector if supported
+      if ('BarcodeDetector' in window) {
+        const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['qr_code', 'code_128', 'code_39'] });
+        scanIntervalRef.current = setInterval(async () => {
+          if (videoRef.current && videoRef.current.readyState >= 2) {
+            try {
+              const barcodes = await barcodeDetector.detect(videoRef.current);
+              if (barcodes && barcodes.length > 0) {
+                const scannedRaw = barcodes[0].rawValue;
+                if (scannedRaw) {
+                  stopCamera();
+                  handleBarcodeScanned(scannedRaw);
+                }
+              }
+            } catch (e) {
+              // frame decode pass
+            }
+          }
+        }, 300);
+      }
+    } catch (err: any) {
+      setCameraError(err?.message || 'Unable to access device camera. Please allow camera permissions.');
+      setCameraActive(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraActive(false);
+  };
+
+  React.useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
+  const handleBarcodeScanned = (scannedValue: string) => {
+    setIsScanningAnimation(true);
+    setTimeout(() => {
+      const result = scanTicket(scannedValue);
+      setIsScanningAnimation(false);
+
+      if (result.status === 'valid') {
+        playSound('success');
+        confetti({
+          particleCount: 50,
+          spread: 70,
+          origin: { y: 0.7 },
+          colors: ['#10b981', '#34d399', '#f43f5e', '#ffffff'],
+        });
+      } else if (result.status === 'already_used') {
+        playSound('warning');
+      } else {
+        playSound('error');
+      }
+    }, 200);
+  };
 
   // Trigger audio feedback effect using Web Audio API synthesized tone
   const playSound = (type: 'success' | 'warning' | 'error') => {
@@ -100,25 +191,8 @@ export const CheckInPage: React.FC = () => {
     e.preventDefault();
     if (!manualTicketInput.trim()) return;
 
-    setIsScanningAnimation(true);
-    setTimeout(() => {
-      const result = scanTicket(manualTicketInput);
-      setIsScanningAnimation(false);
-      setManualTicketInput('');
-
-      if (result.status === 'valid') {
-        playSound('success');
-        confetti({
-          particleCount: 40,
-          spread: 60,
-          origin: { y: 0.7 },
-        });
-      } else if (result.status === 'already_used') {
-        playSound('warning');
-      } else {
-        playSound('error');
-      }
-    }, 300);
+    handleBarcodeScanned(manualTicketInput.trim());
+    setManualTicketInput('');
   };
 
   // Recent scans filtered from activities
@@ -220,45 +294,86 @@ export const CheckInPage: React.FC = () => {
           {/* Scanner Viewfinder Box */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col items-center justify-center relative overflow-hidden">
             {/* Viewfinder Target Frame */}
-            <div className="relative w-full max-w-sm aspect-square bg-slate-950 rounded-2xl border-2 border-slate-800 flex flex-col items-center justify-center overflow-hidden shadow-2xl p-6">
+            <div className="relative w-full max-w-sm aspect-square bg-slate-950 rounded-2xl border-2 border-slate-800 flex flex-col items-center justify-center overflow-hidden shadow-2xl p-4">
               {/* Corner Reticles */}
-              <div className="absolute top-4 left-4 w-7 h-7 border-t-3 border-l-3 border-rose-500 rounded-tl-lg" />
-              <div className="absolute top-4 right-4 w-7 h-7 border-t-3 border-r-3 border-rose-500 rounded-tr-lg" />
-              <div className="absolute bottom-4 left-4 w-7 h-7 border-b-3 border-l-3 border-rose-500 rounded-bl-lg" />
-              <div className="absolute bottom-4 right-4 w-7 h-7 border-b-3 border-r-3 border-rose-500 rounded-br-lg" />
+              <div className="absolute top-4 left-4 w-7 h-7 border-t-3 border-l-3 border-rose-500 rounded-tl-lg z-20" />
+              <div className="absolute top-4 right-4 w-7 h-7 border-t-3 border-r-3 border-rose-500 rounded-tr-lg z-20" />
+              <div className="absolute bottom-4 left-4 w-7 h-7 border-b-3 border-l-3 border-rose-500 rounded-bl-lg z-20" />
+              <div className="absolute bottom-4 right-4 w-7 h-7 border-b-3 border-r-3 border-rose-500 rounded-br-lg z-20" />
+
+              {/* Video Element for live camera feed */}
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`absolute inset-0 w-full h-full object-cover rounded-xl z-10 ${
+                  cameraActive ? 'block' : 'hidden'
+                }`}
+              />
 
               {/* Laser Line Scanning Animation */}
               <div
-                className={`absolute left-4 right-4 h-1 bg-gradient-to-r from-rose-500 via-pink-400 to-rose-500 shadow-[0_0_12px_#f43f5e] transition-all duration-700 ${
+                className={`absolute left-4 right-4 h-1 bg-gradient-to-r from-rose-500 via-pink-400 to-rose-500 shadow-[0_0_12px_#f43f5e] transition-all duration-700 z-20 ${
                   isScanningAnimation ? 'top-3/4 animate-bounce' : 'top-1/2 opacity-70 animate-pulse'
                 }`}
               />
 
-              {/* Center Target Icon */}
-              <div className="z-10 flex flex-col items-center text-center space-y-3">
-                <div className="w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white backdrop-blur-xs">
-                  <QrCode className="w-10 h-10 text-rose-400" />
+              {/* Center Target Icon when camera is not active */}
+              {!cameraActive && (
+                <div className="z-10 flex flex-col items-center text-center space-y-3">
+                  <div className="w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white backdrop-blur-xs">
+                    <QrCode className="w-10 h-10 text-rose-400" />
+                  </div>
+                  <div className="text-slate-300 text-xs">
+                    <p className="font-semibold text-white">Scanner Viewfinder Ready</p>
+                    <p className="text-[11px] text-slate-400">Position attendee QR pass or use camera</p>
+                  </div>
                 </div>
-                <div className="text-slate-300 text-xs">
-                  <p className="font-semibold text-white">Camera Viewfinder Active</p>
-                  <p className="text-[11px] text-slate-400">Position attendee QR pass within target</p>
-                </div>
-              </div>
+              )}
 
               {/* Subtle grid backdrop */}
               <div className="absolute inset-0 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px] opacity-30" />
             </div>
 
-            {/* Primary Action Button: Simulate QR Scan */}
-            <div className="mt-6 flex flex-col sm:flex-row items-center gap-3 w-full max-w-sm">
+            {cameraError && (
+              <div className="mt-3 p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs text-center max-w-sm">
+                {cameraError}
+              </div>
+            )}
+
+            {/* Action Buttons: Live Camera Scan + Simulate Scan */}
+            <div className="mt-6 flex flex-col sm:flex-row items-center gap-2.5 w-full max-w-sm">
+              <button
+                type="button"
+                onClick={cameraActive ? stopCamera : startCamera}
+                className={`flex-1 w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs shadow-md transition-all cursor-pointer ${
+                  cameraActive
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-600/20'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+                }`}
+              >
+                {cameraActive ? (
+                  <>
+                    <CameraOff className="w-4 h-4 text-amber-200" />
+                    <span>Stop Camera</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera className="w-4 h-4 text-emerald-200" />
+                    <span>Open Live Camera</span>
+                  </>
+                )}
+              </button>
+
               <button
                 type="button"
                 onClick={handleSimulateScan}
                 disabled={isScanningAnimation}
-                className="w-full inline-flex items-center justify-center gap-2.5 px-6 py-3.5 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-bold text-sm rounded-xl shadow-lg shadow-rose-600/20 transition-all disabled:opacity-50"
+                className="flex-1 w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-md shadow-rose-600/20 transition-all disabled:opacity-50 cursor-pointer"
               >
                 <Scan className="w-4 h-4 text-rose-200" />
-                <span>Simulate QR Scan</span>
+                <span>Simulate Scan</span>
               </button>
             </div>
 
@@ -276,7 +391,7 @@ export const CheckInPage: React.FC = () => {
               </div>
               <button
                 type="submit"
-                className="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl whitespace-nowrap"
+                className="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl whitespace-nowrap cursor-pointer"
               >
                 Verify
               </button>

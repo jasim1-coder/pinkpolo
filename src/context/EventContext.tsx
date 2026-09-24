@@ -438,7 +438,18 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     const ticketSeq = Math.floor(100000 + Math.random() * 900000);
     const ticketId = reg.ticketId || `PINK-2026-00${ticketSeq.toString().slice(-4)}`;
-    const qrValue = `PINK-POLO-2026-${ticketId}-${reg.name.toUpperCase().replace(/\s+/g, '-')}-${reg.tier.toUpperCase().replace(/\s+/g, '-')}`;
+    const qrData = {
+      event: 'PINK_POLO_2026',
+      ticketId,
+      id: reg.id,
+      name: reg.name,
+      email: reg.email,
+      tier: reg.tier,
+      gate: reg.tier === 'VIP Pavilion' ? 'Gate 1 (Royal Pavilion)' : 'Gate 2 (Main Gate)',
+      status: 'Approved',
+      valid: true,
+    };
+    const qrValue = JSON.stringify(qrData);
     const now = new Date().toISOString().replace('T', ' ').substring(0, 16);
 
     const updatedReg: Registration = {

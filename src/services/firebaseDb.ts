@@ -174,6 +174,16 @@ export const checkInAttendeeInFirestore = async (
     let matchedAttendee: Registration | null = null;
     const digitsOnly = queryUpper.replace(/[^0-9]/g, '');
 
+    let jsonTicketId = '';
+    let jsonRegId = '';
+    try {
+      if (rawInput.startsWith('{') && rawInput.endsWith('}')) {
+        const parsed = JSON.parse(rawInput);
+        jsonTicketId = (parsed.ticketId || parsed.ticket_id || '').toUpperCase();
+        jsonRegId = (parsed.id || parsed.regId || parsed.registrationId || '').toUpperCase();
+      }
+    } catch {}
+
     snapshot.forEach((docSnap) => {
       const r = docSnap.data() as Registration;
       const tid = (r.ticketId || '').toUpperCase();
@@ -185,6 +195,8 @@ export const checkInAttendeeInFirestore = async (
         (tid && tid === queryUpper) ||
         (qv && qv === queryUpper) ||
         (rid && rid === queryUpper) ||
+        (jsonTicketId && tid && tid === jsonTicketId) ||
+        (jsonRegId && rid && rid === jsonRegId) ||
         (tid && queryUpper.includes(tid)) ||
         (qv && queryUpper.includes(qv)) ||
         (rid && queryUpper.includes(rid)) ||

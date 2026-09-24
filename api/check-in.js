@@ -94,8 +94,15 @@ export default async function handler(req, res) {
   const previousScan = store.checkedInTickets.get(rawInput) || store.checkedInTickets.get(queryUpper);
   const digitsOnly = queryUpper.replace(/[^0-9]/g, '');
 
-  let matched = null;
-  let matchedDocId = null;
+  let jsonTicketId = '';
+  let jsonRegId = '';
+  try {
+    if (rawInput.startsWith('{') && rawInput.endsWith('}')) {
+      const parsed = JSON.parse(rawInput);
+      jsonTicketId = (parsed.ticketId || parsed.ticket_id || '').toUpperCase();
+      jsonRegId = (parsed.id || parsed.regId || parsed.registrationId || '').toUpperCase();
+    }
+  } catch {}
 
   // 1. Check in-memory store
   for (const r of store.registrations.values()) {
@@ -108,6 +115,8 @@ export default async function handler(req, res) {
       (tid && tid === queryUpper) ||
       (qv && qv === queryUpper) ||
       (rid && rid === queryUpper) ||
+      (jsonTicketId && tid === jsonTicketId) ||
+      (jsonRegId && rid === jsonRegId) ||
       (tid && tid.includes(queryUpper)) ||
       (tid && queryUpper.includes(tid)) ||
       (qv && qv.includes(queryUpper)) ||
@@ -123,7 +132,7 @@ export default async function handler(req, res) {
   }
 
   // 2. If not found in-memory, query Firestore directly
-  if (!matched) {
+  if (!matched && db) {
     try {
       const colRef = collection(db, 'registrations');
       const snapshot = await getDocs(colRef);
@@ -138,6 +147,8 @@ export default async function handler(req, res) {
           (tid && tid === queryUpper) ||
           (qv && qv === queryUpper) ||
           (rid && rid === queryUpper) ||
+          (jsonTicketId && tid === jsonTicketId) ||
+          (jsonRegId && rid === jsonRegId) ||
           (tid && tid.includes(queryUpper)) ||
           (tid && queryUpper.includes(tid)) ||
           (qv && qv.includes(queryUpper)) ||
