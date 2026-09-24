@@ -419,7 +419,7 @@ export const RegistrationDetailModal: React.FC = () => {
         {/* Footer */}
         <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
           <span className="text-xs text-slate-400">
-            Pink Polo 2026 Invitational · Qatar Equestrian Federation
+            Pink Polo 2026 Invitational · Ghantoot Racing & Polo Club, Abu Dhabi
           </span>
           <button
             type="button"

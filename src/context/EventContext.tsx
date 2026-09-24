@@ -685,7 +685,27 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return res;
     }
 
-    if (found.checkedIn) {
+    // --- MULTI-DAY CHECK-IN & ANTI-PASSBACK VALIDATION ---
+    const todayDateStr = new Date().toISOString().slice(0, 10);
+    const dailyMap = found.dailyCheckIns || {};
+    let scannedTodayRecord = dailyMap[todayDateStr] || null;
+
+    if (!scannedTodayRecord && found.checkedIn && found.checkedInAt) {
+      if (found.checkedInAt.startsWith(todayDateStr)) {
+        scannedTodayRecord = {
+          date: todayDateStr,
+          time: found.checkedInAt.split(' ')[1] || timeFormatted,
+          timestampIso: found.checkedInAt,
+          gate: found.scannedGate || 'Main Gate',
+          scannedBy: found.scannedBy || 'Admin Console',
+          timestamp: Date.now(),
+        };
+      }
+    }
+
+    if (scannedTodayRecord) {
+      const scanTime = scannedTodayRecord.time || timeFormatted;
+      const scanGate = scannedTodayRecord.gate || found.scannedGate || 'Main Gate';
       const res: ScanResult = {
         status: 'already_used',
         registration: found,
@@ -695,16 +715,33 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         tier: found.tier,
         ticketStatus: 'Checked In',
         checkInStatus: 'Checked In',
-        message: `This ticket was already used by ${found.name} at ${found.checkedInAt || 'earlier session'}.`,
+        message: `This ticket was already scanned today (${todayDateStr}) at ${scanTime} at ${scanGate}. Same-day re-entry requires wristband verification.`,
         scannedAt: timeFormatted,
       };
       setLastScanResult(res);
-      addToast('warning', 'ALREADY CHECKED IN', `Ticket ${found.ticketId} was scanned previously.`);
+      addToast('warning', 'ALREADY CHECKED IN TODAY', `Ticket ${found.ticketId} was scanned today at ${scanTime}.`);
       return res;
     }
 
-    // Valid check-in!
+    // Valid check-in for today!
     const nowIso = new Date().toISOString().replace('T', ' ').substring(0, 16);
+    const newScanRecord = {
+      date: todayDateStr,
+      time: timeFormatted,
+      timestampIso: nowIso,
+      gate: 'Main Gate',
+      scannedBy: 'Admin Console',
+      timestamp: Date.now(),
+    };
+
+    const existingHistory = Array.isArray(found.checkInHistory) ? found.checkInHistory : [];
+    const updatedHistory = [...existingHistory, newScanRecord];
+    const updatedDailyMap = {
+      ...(found.dailyCheckIns || {}),
+      [todayDateStr]: newScanRecord,
+    };
+    const totalDaysAttended = Object.keys(updatedDailyMap).length;
+
     const updated: Registration = {
       ...found,
       checkedIn: true,
@@ -713,6 +750,8 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       checkInStatus: 'Checked In',
       scannedGate: 'Main Gate',
       scannedBy: 'Admin Console',
+      dailyCheckIns: updatedDailyMap,
+      checkInHistory: updatedHistory,
     };
 
     const nextList = registrations.map((item) => (item.id === found.id ? updated : item));

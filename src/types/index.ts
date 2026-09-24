@@ -2,6 +2,15 @@ export type RegistrationStatus = 'Pending' | 'Approved' | 'Rejected';
 export type TicketStatus = 'Valid' | 'Void' | 'Used' | 'Checked In' | 'Pending';
 export type AttendeeTier = 'VIP Pavilion' | 'Grandstand' | 'Garden Terrace' | 'Clubhouse Lounge';
 
+export interface DailyCheckInRecord {
+  date: string; // YYYY-MM-DD
+  time: string; // HH:MM:SS
+  timestampIso: string;
+  gate: string;
+  scannedBy: string;
+  timestamp: number;
+}
+
 export interface Registration {
   id: string; // e.g. REG-2026-0842
   name: string;
@@ -18,6 +27,8 @@ export interface Registration {
   checkInStatus?: 'Checked In' | 'Not Checked In';
   scannedGate?: string;
   scannedBy?: string;
+  dailyCheckIns?: Record<string, DailyCheckInRecord>;
+  checkInHistory?: DailyCheckInRecord[];
   tier: AttendeeTier;
   notes?: string;
   rejectionReason?: string;

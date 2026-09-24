@@ -233,11 +233,31 @@ export const checkInAttendeeInFirestore = async (
       };
     }
 
-    if (attendee.checkedIn) {
+    // --- MULTI-DAY CHECK-IN & ANTI-PASSBACK VALIDATION ---
+    const todayDateStr = new Date().toISOString().slice(0, 10);
+    const dailyMap = attendee.dailyCheckIns || {};
+    let scannedTodayRecord = dailyMap[todayDateStr] || null;
+
+    if (!scannedTodayRecord && attendee.checkedIn && attendee.checkedInAt) {
+      if (attendee.checkedInAt.startsWith(todayDateStr)) {
+        scannedTodayRecord = {
+          date: todayDateStr,
+          time: attendee.checkedInAt.split(' ')[1] || timeFormatted,
+          timestampIso: attendee.checkedInAt,
+          gate: attendee.scannedGate || gate,
+          scannedBy: attendee.scannedBy || scannedBy,
+          timestamp: Date.now(),
+        };
+      }
+    }
+
+    if (scannedTodayRecord) {
+      const scanTime = scannedTodayRecord.time || timeFormatted;
+      const scanGate = scannedTodayRecord.gate || attendee.scannedGate || gate;
       return {
         success: false,
         status: 'already_used',
-        message: `ALREADY SCANNED: Ticket ${attendee.ticketId} was already used by ${attendee.name} at ${attendee.checkedInAt}.`,
+        message: `ALREADY SCANNED TODAY (${todayDateStr}): Ticket ${attendee.ticketId || rawInput} was already verified at ${scanTime} at ${scanGate}. Same-day re-entry requires wristband verification.`,
         guestName: attendee.name,
         guestEmail: attendee.email,
         ticketId: attendee.ticketId,
@@ -248,6 +268,24 @@ export const checkInAttendeeInFirestore = async (
       };
     }
 
+    // Record check-in for today
+    const newScanRecord = {
+      date: todayDateStr,
+      time: timeFormatted,
+      timestampIso: nowIso,
+      gate: gate,
+      scannedBy: scannedBy,
+      timestamp: Date.now(),
+    };
+
+    const existingHistory = Array.isArray(attendee.checkInHistory) ? attendee.checkInHistory : [];
+    const updatedHistory = [...existingHistory, newScanRecord];
+    const updatedDailyMap = {
+      ...(attendee.dailyCheckIns || {}),
+      [todayDateStr]: newScanRecord,
+    };
+    const totalDaysAttended = Object.keys(updatedDailyMap).length;
+
     // Mark as Checked In directly in Firestore DB
     const updatedAttendee: Registration = {
       ...attendee,
@@ -257,6 +295,8 @@ export const checkInAttendeeInFirestore = async (
       checkInStatus: 'Checked In',
       scannedGate: gate,
       scannedBy: scannedBy,
+      dailyCheckIns: updatedDailyMap,
+      checkInHistory: updatedHistory,
     };
 
     await updateDoc(doc(db, REGISTRATIONS_COL, matchedDocId), {
@@ -266,13 +306,15 @@ export const checkInAttendeeInFirestore = async (
       checkInStatus: 'Checked In',
       scannedGate: gate,
       scannedBy: scannedBy,
+      dailyCheckIns: updatedDailyMap,
+      checkInHistory: updatedHistory,
     });
 
     // Log Activity to Firestore DB
     const activity: ActivityItem = {
       id: `ACT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       type: 'checkin',
-      title: `${updatedAttendee.name} checked in`,
+      title: `${updatedAttendee.name} checked in (Day ${totalDaysAttended})`,
       description: `Gate: ${gate} · Scanned by: ${scannedBy} (${updatedAttendee.tier})`,
       timestamp: timeFormatted,
       timeAgo: 'Just now',
@@ -285,7 +327,7 @@ export const checkInAttendeeInFirestore = async (
     return {
       success: true,
       status: 'valid',
-      message: `Pass Verified: ${updatedAttendee.name} cleared for entry.`,
+      message: `PASS VERIFIED: Welcome, ${updatedAttendee.name}! Access granted for ${updatedAttendee.tier} (${todayDateStr} · Day ${totalDaysAttended}).`,
       guestName: updatedAttendee.name,
       guestEmail: updatedAttendee.email,
       ticketId: updatedAttendee.ticketId,

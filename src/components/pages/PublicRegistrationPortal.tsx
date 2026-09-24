@@ -53,7 +53,7 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
   // Form State
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [countryCode, setCountryCode] = useState('+974');
+  const [countryCode, setCountryCode] = useState('+971');
   const [phoneLocal, setPhoneLocal] = useState('');
   const [selectedTier, setSelectedTier] = useState<AttendeeTier>('VIP Pavilion');
   const [organization, setOrganization] = useState('');
@@ -282,7 +282,7 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                   <span className="text-stone-400">·</span>
                   <span className="flex items-center gap-1.5">
                     <MapPin className="w-4 h-4 text-rose-300" />
-                    Al Rayyan, Doha
+                    Ghantoot, Abu Dhabi
                   </span>
                 </div>
               </div>
@@ -378,11 +378,12 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                         }}
                         className="text-xs sm:text-sm px-2.5 sm:px-3 py-3 sm:py-3.5 bg-stone-50/70 border border-stone-200 rounded-xl focus:outline-none focus:border-rose-500 text-stone-700 font-mono"
                       >
-                        <option value="+974">QA +974</option>
                         <option value="+971">AE +971</option>
+                        <option value="+974">QA +974</option>
                         <option value="+966">SA +966</option>
                         <option value="+965">KW +965</option>
                         <option value="+973">BH +973</option>
+                        <option value="+968">OM +968</option>
                         <option value="+44">UK +44</option>
                         <option value="+1">US +1</option>
                       </select>
@@ -420,7 +421,7 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                         type="text"
                         value={organization}
                         onChange={(e) => setOrganization(e.target.value)}
-                        placeholder="e.g. Qatar Foundation"
+                        placeholder="e.g. Abu Dhabi Investment Authority"
                         className="w-full text-xs sm:text-sm pl-10 pr-3.5 py-3 sm:py-3.5 bg-stone-50/70 border border-stone-200 rounded-xl focus:bg-white focus:outline-none focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 text-stone-900 transition-all placeholder:text-stone-400"
                       />
                     </div>
@@ -747,7 +748,7 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                   </li>
                   <li className="flex items-start gap-1.5">
                     <span className="text-emerald-600 font-bold">2.</span>
-                    <span>Arrive at Al Rayyan Grounds between 14:00 and 16:30.</span>
+                    <span>Arrive at Ghantoot Polo Grounds, Abu Dhabi between 14:00 and 16:30.</span>
                   </li>
                   <li className="flex items-start gap-1.5">
                     <span className="text-emerald-600 font-bold">3.</span>
@@ -936,7 +937,7 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                 <div className="bg-slate-50 rounded-xl p-3 my-2 border border-slate-200 shadow-2xs space-y-2 text-xs">
                   <div className="bg-white p-2 rounded-lg border border-slate-200 text-[11px] space-y-0.5">
                     <div>
-                      <span className="font-semibold text-slate-900">From:</span> Pink Polo 2026 Committee &lt;invitations@pinkpolo2026.qa&gt;
+                      <span className="font-semibold text-slate-900">From:</span> Pink Polo 2026 Committee &lt;invitations@pinkpolo.ae&gt;
                     </div>
                     <div>
                       <span className="font-semibold text-slate-900">To:</span> {liveReg.email}

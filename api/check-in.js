@@ -82,16 +82,15 @@ export default async function handler(req, res) {
       });
     }
 
-  const queryUpper = rawInput.toUpperCase();
-  const timeFormatted = new Date().toLocaleTimeString('en-US', {
+  const now = new Date();
+  const todayDateStr = now.toISOString().slice(0, 10);
+  const timeFormatted = now.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   });
-  const nowIso = new Date().toISOString().replace('T', ' ').substring(0, 16);
+  const nowIso = now.toISOString().replace('T', ' ').substring(0, 16);
 
-  // Check if ticket was already marked as checked-in in the store
-  const previousScan = store.checkedInTickets.get(rawInput) || store.checkedInTickets.get(queryUpper);
   const digitsOnly = queryUpper.replace(/[^0-9]/g, '');
 
   let jsonTicketId = '';
@@ -193,31 +192,78 @@ export default async function handler(req, res) {
     });
   }
 
-  // Duplicate Check
-  if (matched.checkedIn || previousScan) {
-    const existingTime = matched.checkedInAt || previousScan?.checkedInAt || nowIso;
+  // --- MULTI-DAY CHECK-IN & ANTI-PASSBACK VALIDATION ---
+  const dailyMap = matched.dailyCheckIns || {};
+  let scannedTodayRecord = dailyMap[todayDateStr] || null;
+
+  // Check legacy checkedInAt if dailyCheckIns map was not initialized
+  if (!scannedTodayRecord && matched.checkedIn && matched.checkedInAt) {
+    if (matched.checkedInAt.startsWith(todayDateStr)) {
+      scannedTodayRecord = {
+        date: todayDateStr,
+        time: matched.checkedInAt.split(' ')[1] || timeFormatted,
+        gate: matched.scannedGate || 'Main Gate',
+        scannedBy: matched.scannedBy || 'Turnstile Scanner',
+      };
+    }
+  }
+
+  // Check in-memory store for fast duplicate prevention on the same day
+  if (!scannedTodayRecord) {
+    const memKeyToday = `${rawInput}_${todayDateStr}`;
+    const memKeyUpper = `${queryUpper}_${todayDateStr}`;
+    const memMatch = store.checkedInTickets.get(memKeyToday) || store.checkedInTickets.get(memKeyUpper);
+    if (memMatch) {
+      scannedTodayRecord = memMatch;
+    }
+  }
+
+  if (scannedTodayRecord) {
+    const scanTime = scannedTodayRecord.time || scannedTodayRecord.checkedInAt || timeFormatted;
+    const scanGate = scannedTodayRecord.gate || matched.scannedGate || gate;
     return res.status(409).json({
       success: false,
       status: 'already_used',
-      message: `ALREADY SCANNED: Ticket ${matched.ticketId || rawInput} was already used by ${matched.name} at ${existingTime}.`,
+      message: `ALREADY SCANNED TODAY (${todayDateStr}): Ticket ${matched.ticketId || rawInput} was already verified at ${scanTime} at ${scanGate}. Same-day re-entry requires wristband verification.`,
       guestName: matched.name,
       guestEmail: matched.email,
       ticketId: matched.ticketId,
       tier: matched.tier,
       ticketStatus: 'Checked In',
       checkInStatus: 'Checked In',
+      scannedToday: true,
+      scanDate: todayDateStr,
+      scanTime: scanTime,
+      scanGate: scanGate,
       attendee: {
         ...matched,
         ticketStatus: 'Checked In',
         checkInStatus: 'Checked In',
         checkedIn: true,
-        checkedInAt: existingTime,
       },
       scannedAt: timeFormatted,
     });
   }
 
-  // Successful Check-In!
+  // --- SUCCESSFUL CHECK-IN FOR TODAY ---
+  const newScanRecord = {
+    date: todayDateStr,
+    time: timeFormatted,
+    timestampIso: nowIso,
+    gate: gate,
+    scannedBy: scannedBy,
+    timestamp: Date.now(),
+  };
+
+  const existingHistory = Array.isArray(matched.checkInHistory) ? matched.checkInHistory : [];
+  const updatedHistory = [...existingHistory, newScanRecord];
+  const updatedDailyMap = {
+    ...(matched.dailyCheckIns || {}),
+    [todayDateStr]: newScanRecord,
+  };
+
+  const totalDaysAttended = Object.keys(updatedDailyMap).length;
+
   const updated = {
     ...matched,
     checkedIn: true,
@@ -226,10 +272,12 @@ export default async function handler(req, res) {
     checkInStatus: 'Checked In',
     scannedGate: gate,
     scannedBy: scannedBy,
+    dailyCheckIns: updatedDailyMap,
+    checkInHistory: updatedHistory,
   };
   store.registrations.set(matched.id, updated);
 
-  if (matchedDocId) {
+  if (matchedDocId && db) {
     try {
       await updateDoc(doc(db, 'registrations', matchedDocId), {
         checkedIn: true,
@@ -238,39 +286,29 @@ export default async function handler(req, res) {
         checkInStatus: 'Checked In',
         scannedGate: gate,
         scannedBy: scannedBy,
+        dailyCheckIns: updatedDailyMap,
+        checkInHistory: updatedHistory,
       });
     } catch (e) {
       console.error('Error updating doc in Firestore in api/check-in:', e);
     }
   }
 
-  const scannedKey = matched.ticketId || rawInput;
-
-  // Store in scanned tickets lookup by ticket ID, qr value, and ID
-  const scanData = {
-    ticketId: matched.ticketId || rawInput,
-    id: matched.id,
-    attendeeName: matched.name,
-    checkedInAt: nowIso,
-    ticketStatus: 'Checked In',
-    checkInStatus: 'Checked In',
-    gate,
-    scannedBy,
-  };
-  store.checkedInTickets.set(rawInput, scanData);
-  store.checkedInTickets.set(queryUpper, scanData);
+  // Record today's scan in in-memory store for instant zero-latency caching
+  const memKeyToday = `${rawInput}_${todayDateStr}`;
+  store.checkedInTickets.set(memKeyToday, newScanRecord);
+  store.checkedInTickets.set(`${queryUpper}_${todayDateStr}`, newScanRecord);
   if (matched.ticketId) {
-    store.checkedInTickets.set(matched.ticketId.toUpperCase(), scanData);
-    store.checkedInTickets.set(matched.ticketId, scanData);
+    store.checkedInTickets.set(`${matched.ticketId.toUpperCase()}_${todayDateStr}`, newScanRecord);
   }
   if (matched.id) {
-    store.checkedInTickets.set(matched.id, scanData);
+    store.checkedInTickets.set(`${matched.id.toUpperCase()}_${todayDateStr}`, newScanRecord);
   }
 
   const activity = {
     id: `ACT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     type: 'checkin',
-    title: `${updated.name} checked in via Scanner`,
+    title: `${updated.name} checked in (Day ${totalDaysAttended})`,
     description: `Gate: ${gate} · Scanned by: ${scannedBy} (${updated.tier})`,
     timestamp: timeFormatted,
     timeAgo: 'Just now',
@@ -280,20 +318,23 @@ export default async function handler(req, res) {
   };
   store.activities.unshift(activity);
 
-    return res.status(200).json({
-      success: true,
-      status: 'valid',
-      message: `PASS VERIFIED: Welcome, ${updated.name}! Access granted for ${updated.tier}.`,
-      guestName: updated.name,
-      guestEmail: updated.email,
-      ticketId: updated.ticketId,
-      tier: updated.tier,
-      ticketStatus: 'Checked In',
-      checkInStatus: 'Checked In',
-      attendee: updated,
-      gate,
-      scannedAt: timeFormatted,
-    });
+  return res.status(200).json({
+    success: true,
+    status: 'valid',
+    message: `PASS VERIFIED: Welcome, ${updated.name}! Access granted for ${updated.tier} (${todayDateStr} · Day ${totalDaysAttended}).`,
+    guestName: updated.name,
+    guestEmail: updated.email,
+    ticketId: updated.ticketId,
+    tier: updated.tier,
+    gate: gate,
+    checkInDate: todayDateStr,
+    checkInTime: timeFormatted,
+    totalDaysAttended: totalDaysAttended,
+    ticketStatus: 'Checked In',
+    checkInStatus: 'Checked In',
+    attendee: updated,
+    scannedAt: timeFormatted,
+  });
   } catch (err) {
     console.error('Serverless check-in exception:', err);
     return res.status(500).json({

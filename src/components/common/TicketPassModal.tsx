@@ -177,8 +177,8 @@ export const TicketPassModal: React.FC = () => {
                     <MapPin className="w-3 h-3 text-rose-500" />
                     <span>Venue</span>
                   </div>
-                  <p className="font-semibold text-slate-800 truncate" title="Al Rayyan Equestrian Grounds, Doha">
-                    Al Rayyan Grounds
+                  <p className="font-semibold text-slate-800 truncate" title="Ghantoot Racing & Polo Club, Abu Dhabi">
+                    Ghantoot Grounds, Abu Dhabi
                   </p>
                 </div>
               </div>

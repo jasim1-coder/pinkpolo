@@ -25,7 +25,7 @@ export const SettingsPage: React.FC = () => {
 
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [eventTitle, setEventTitle] = useState('Pink Polo 2026 Charity Invitational & Gala');
-  const [eventVenue, setEventVenue] = useState('Al Rayyan Equestrian Grounds, Doha, Qatar');
+  const [eventVenue, setEventVenue] = useState('Ghantoot Racing & Polo Club, Abu Dhabi, UAE');
   const [savedNotice, setSavedNotice] = useState(false);
 
   const handleSaveSettings = (e: React.FormEvent) => {

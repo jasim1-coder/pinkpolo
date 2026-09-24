@@ -22,7 +22,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: 'Recipient phone number is required' });
     }
 
-    // Clean phone number to digits only (e.g. +974 5512 3456 -> 97455123456)
+    // Clean phone number to digits only (e.g. +971 50 512 3456 -> 971505123456)
     const cleanPhone = String(to).replace(/[^0-9]/g, '');
 
     const apiVersion = process.env.WHATSAPP_API_VERSION || 'v22.0';

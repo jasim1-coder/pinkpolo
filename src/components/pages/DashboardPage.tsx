@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Flame,
   Send,
+  BarChart3,
 } from 'lucide-react';
 import poloBannerImg from '../../assets/images/pink_polo_banner_1790157590237.jpg';
 import ghantootLogo from '../../assets/images/ghantoot_polo_logo.png';
@@ -113,7 +114,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
       bgLight: 'bg-sky-50/50',
       border: 'border-sky-200',
       iconBg: 'bg-sky-100 text-sky-700',
-      tabTarget: 'checkin' as NavTab,
+      tabTarget: 'analytics' as NavTab,
     },
   ];
 
@@ -243,11 +244,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setCurrentTab }) =
               <span>Submit Request (Guest UI)</span>
             </button>
             <button
-              onClick={() => setCurrentTab('checkin')}
+              onClick={() => setCurrentTab('analytics')}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-slate-900 hover:bg-rose-50 font-semibold text-xs rounded-xl shadow-md transition-colors"
             >
-              <QrCode className="w-4 h-4 text-rose-600" />
-              <span>Launch Gate Scanner</span>
+              <BarChart3 className="w-4 h-4 text-rose-600" />
+              <span>Attendance Manifest</span>
             </button>
             <button
               onClick={simulateNewRegistration}

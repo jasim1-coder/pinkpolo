@@ -100,7 +100,7 @@ const AdminAppContent: React.FC = () => {
             <RegistrationsPage onOpenRegisterForm={() => setCurrentTab('register')} />
           )}
           {currentTab === 'tickets' && <TicketsPage />}
-          {currentTab === 'checkin' && <CheckInPage />}
+          {currentTab === 'checkin' && <AnalyticsPage />}
           {currentTab === 'register' && <PublicRegistrationPortal isStandalonePublic={false} />}
           {currentTab === 'analytics' && <AnalyticsPage />}
         </main>

@@ -54,15 +54,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'bg-slate-100 text-slate-700',
     },
     {
-      id: 'checkin' as NavTab,
-      label: 'Gate Check-In',
-      icon: QrCode,
-      badge: 'Live',
-      badgeColor: 'bg-rose-100 text-rose-700 font-semibold',
-    },
-    {
       id: 'analytics' as NavTab,
-      label: 'Analytics',
+      label: 'Analytics & Attendance',
       icon: BarChart3,
       badge: null,
     },
@@ -146,7 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="text-xs font-semibold text-slate-900">Event Dates</span>
           </div>
           <p className="text-[11px] text-slate-600 leading-tight">
-            Nov 20–22, 2026 · Al Rayyan Equestrian Grounds
+            Nov 20–22, 2026 · Ghantoot Polo Grounds, Abu Dhabi
           </p>
           <div className="pt-1 flex items-center justify-between text-[11px] text-rose-700 font-medium">
             <span>Gate Open: 14:00</span>
@@ -154,28 +147,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* PWA Scanner Integration Button */}
-        <div className="px-3 pb-1">
-          <button
-            type="button"
-            onClick={() => {
-              setPwaModalOpen(true);
-              setIsOpenMobile(false);
-            }}
-            className="w-full flex items-center justify-between px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer border border-slate-700"
-          >
-            <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <Smartphone className="w-3.5 h-3.5 text-rose-300" />
-              <span>PWA Scanner API</span>
-            </div>
-            <span className="text-[10px] text-slate-400">Docs & Test</span>
-          </button>
-        </div>
-
         {/* Sidebar Footer */}
         <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-          <span className="text-[11px]">System v2.4 (Prototype)</span>
+          <span className="text-[11px]">Pink Polo 2026 Admin</span>
           <span className="w-2 h-2 rounded-full bg-emerald-500" title="System operational" />
         </div>
       </aside>

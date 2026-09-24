@@ -99,8 +99,8 @@ export default async function handler(req, res) {
         });
       }
 
-      // If number is structurally valid (e.g. Qatar +974 70372690, 8 digits), accept gracefully
-      const isGccValid = /^(974[3567]\d{7}|971[5]\d{8}|966[5]\d{8}|965[569]\d{7}|973[36]\d{7}|\d{10,15})$/.test(cleanPhone);
+      // If number is structurally valid (e.g. UAE +971 50 123 4567), accept gracefully
+      const isGccValid = /^(971[5]\d{8}|974[3567]\d{7}|966[5]\d{8}|965[569]\d{7}|973[36]\d{7}|\d{10,15})$/.test(cleanPhone);
       if (isGccValid) {
         return res.status(200).json({
           success: true,
