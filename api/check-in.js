@@ -104,6 +104,9 @@ export default async function handler(req, res) {
     }
   } catch {}
 
+  let matched = null;
+  let matchedDocId = null;
+
   // 1. Check in-memory store
   for (const r of store.registrations.values()) {
     const tid = (r.ticketId || '').toUpperCase();
