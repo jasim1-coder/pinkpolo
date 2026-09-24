@@ -123,8 +123,10 @@ export async function verifyWhatsAppNumber(phone: string, name?: string): Promis
     };
   } catch (err: any) {
     console.error('WhatsApp verify network error:', err);
-    // On unexpected network failures, allow graceful fallback
-    return { valid: true, recipient: cleanPhone };
+    return {
+      valid: false,
+      error: 'WhatsApp verification service is unreachable. Please check your connection and try again.',
+    };
   }
 }
 

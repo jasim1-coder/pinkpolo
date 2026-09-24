@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       return res.status(400).json({
         success: false,
         validWhatsApp: false,
-        error: 'Invalid phone number length.',
+        error: 'Invalid phone number length. Please include country code and mobile digits.',
       });
     }
 
@@ -47,7 +47,7 @@ export default async function handler(req, res) {
       to: cleanPhone,
       type: 'text',
       text: {
-        body: `🎗️ *Pink Polo 2026 Registration*\n\nHello *${name || 'Guest'}*,\nThank you for submitting your registration request. We have verified your WhatsApp contact. Your official e-Pass will be delivered here once approved by the organizing committee.`,
+        body: `🏇 *Ghantoot Racing & Polo Club*\n🎗️ *Pink Polo 2026 Registration*\n\nHello *${name || 'Guest'}*,\nThank you for submitting your registration request. We have verified your WhatsApp contact. Your official e-Pass will be delivered here once approved by the organizing committee.`,
       },
     };
 
@@ -68,52 +68,24 @@ export default async function handler(req, res) {
       const errCode = metaData?.error?.code;
       const subCode = metaData?.error?.error_subcode;
       const errMsg = metaData?.error?.message || '';
-      console.warn('Meta WhatsApp Verification Notice:', errCode, subCode, errMsg);
+      console.warn('Meta WhatsApp Verification Warning:', errCode, subCode, errMsg);
 
-      // Only Code 131026 explicitly indicates the user is NOT registered on WhatsApp
-      if (errCode === 131026 || (errMsg.toLowerCase().includes('not a valid whatsapp') && !errMsg.toLowerCase().includes('window'))) {
-        return res.status(200).json({
-          success: false,
-          validWhatsApp: false,
-          error: 'This phone number does not have an active WhatsApp account. Please enter a number that has WhatsApp installed.',
-        });
-      }
-
-      // If invalid phone format (e.g., too short / malformed prefix)
-      if (errCode === 100 && errMsg.toLowerCase().includes('recipient')) {
-        return res.status(200).json({
-          success: false,
-          validWhatsApp: false,
-          error: 'Invalid phone number format. Please ensure country code and mobile number are correct.',
-        });
-      }
-
-      // Code 131047 ("Re-engagement message" / 24-hr window outside) or template requirement (131051)
-      // or sandbox test list limitation actually PROVES the WhatsApp account exists!
-      if (errCode === 131047 || errCode === 131051 || errCode === 131030 || subCode === 2454020) {
+      // Code 131047 ("Re-engagement message" / 24-hr window) or 131051 (Template requirement)
+      // proves the WhatsApp account exists on Meta servers
+      if (errCode === 131047 || errCode === 131051 || errCode === 131030) {
         return res.status(200).json({
           success: true,
           validWhatsApp: true,
           recipient: cleanPhone,
-          note: 'Verified WhatsApp user (outside 24h window or template required).',
+          note: 'Verified WhatsApp user (outside 24h window).',
         });
       }
 
-      // If number is structurally valid (e.g. UAE +971 50 123 4567), accept gracefully
-      const isGccValid = /^(971[5]\d{8}|974[3567]\d{7}|966[5]\d{8}|965[569]\d{7}|973[36]\d{7}|\d{10,15})$/.test(cleanPhone);
-      if (isGccValid) {
-        return res.status(200).json({
-          success: true,
-          validWhatsApp: true,
-          recipient: cleanPhone,
-          warning: errMsg,
-        });
-      }
-
+      // Explicitly reject if number does not have WhatsApp or is invalid
       return res.status(200).json({
         success: false,
         validWhatsApp: false,
-        error: metaData?.error?.message || 'Could not verify WhatsApp account for this number.',
+        error: 'This phone number does not have an active WhatsApp account. Please provide a number with active WhatsApp.',
         details: metaData,
       });
     }

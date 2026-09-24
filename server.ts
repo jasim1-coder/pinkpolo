@@ -137,20 +137,13 @@ async function startServer() {
         const errMsg = (metaData as any)?.error?.message || '';
         console.warn('Meta WhatsApp Verification Warning:', metaData);
 
-        if (errCode === 131026 || errMsg.toLowerCase().includes('not a valid whatsapp') || errMsg.toLowerCase().includes('undeliverable')) {
+        // Codes 131047 or 131051 prove the WhatsApp account exists on Meta servers
+        if (errCode === 131047 || errCode === 131051 || errCode === 131030) {
           res.status(200).json({
-            success: false,
-            validWhatsApp: false,
-            error: 'This phone number does not have an active WhatsApp account. Please enter a number with active WhatsApp.',
-          });
-          return;
-        }
-
-        if (errCode === 100 || errMsg.toLowerCase().includes('recipient')) {
-          res.status(200).json({
-            success: false,
-            validWhatsApp: false,
-            error: 'Invalid phone number format. Please ensure country code and mobile digits are correct.',
+            success: true,
+            validWhatsApp: true,
+            recipient: cleanPhone,
+            note: 'Verified WhatsApp user (outside 24h window).',
           });
           return;
         }
@@ -158,7 +151,7 @@ async function startServer() {
         res.status(200).json({
           success: false,
           validWhatsApp: false,
-          error: (metaData as any)?.error?.message || 'Could not verify WhatsApp account for this number.',
+          error: 'This phone number does not have an active WhatsApp account. Please enter a valid number with active WhatsApp.',
           details: metaData,
         });
         return;
