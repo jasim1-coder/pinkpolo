@@ -576,15 +576,51 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const query = rawInput.toUpperCase();
     const timeFormatted = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+    // Extract potential identifiers from JSON or URLs if scanned from complex QR codes
+    let jsonTicketId = '';
+    let jsonRegId = '';
+    let jsonEmail = '';
+    try {
+      if (rawInput.startsWith('{') && rawInput.endsWith('}')) {
+        const parsed = JSON.parse(rawInput);
+        jsonTicketId = (parsed.ticketId || parsed.ticket_id || '').toUpperCase();
+        jsonRegId = (parsed.id || parsed.regId || parsed.registrationId || '').toUpperCase();
+        jsonEmail = (parsed.email || '').toUpperCase();
+      }
+    } catch {}
+
+    // Regex extraction for ticket IDs like PINK-2026-XXXX or REG-2026-XXXX from text or URLs
+    const pinkMatch = query.match(/PINK-2026-[A-Z0-9]+/i);
+    const regMatch = query.match(/REG-2026-[A-Z0-9]+/i);
+    const extractedPink = pinkMatch ? pinkMatch[0].toUpperCase() : '';
+    const extractedReg = regMatch ? regMatch[0].toUpperCase() : '';
+    const digitsOnly = query.replace(/[^0-9]/g, '');
+
     // Look for registration in local state
-    const found = registrations.find(
-      (r) =>
-        (r.ticketId && r.ticketId.toUpperCase() === query) ||
-        (r.qrValue && r.qrValue.toUpperCase().includes(query)) ||
-        (r.qrValue && query.includes(r.qrValue.toUpperCase())) ||
-        (r.ticketId && query.includes(r.ticketId.toUpperCase())) ||
-        (r.id && r.id.toUpperCase() === query)
-    );
+    const found = registrations.find((r) => {
+      const tid = (r.ticketId || '').toUpperCase();
+      const qv = (r.qrValue || '').toUpperCase();
+      const rid = (r.id || '').toUpperCase();
+      const email = (r.email || '').toUpperCase();
+      const tDigits = tid.replace(/[^0-9]/g, '');
+
+      return (
+        (tid && tid === query) ||
+        (qv && qv === query) ||
+        (rid && rid === query) ||
+        (jsonTicketId && tid && tid === jsonTicketId) ||
+        (jsonRegId && rid && rid === jsonRegId) ||
+        (jsonEmail && email && email === jsonEmail) ||
+        (extractedPink && tid && tid === extractedPink) ||
+        (extractedReg && rid && rid === extractedReg) ||
+        (qv && qv.includes(query)) ||
+        (query && qv && query.includes(qv)) ||
+        (tid && query.includes(tid)) ||
+        (rid && query.includes(rid)) ||
+        (digitsOnly && digitsOnly.length >= 4 && tDigits.endsWith(digitsOnly)) ||
+        (digitsOnly && digitsOnly.length >= 4 && tDigits.includes(digitsOnly))
+      );
+    });
 
     if (!found) {
       const res: ScanResult = {

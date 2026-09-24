@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useEvent } from '../../context/EventContext';
+import jsQR from 'jsqr';
 import {
   QrCode,
   CheckCircle2,
@@ -18,6 +19,9 @@ import {
   Radio,
   Camera,
   CameraOff,
+  SwitchCamera,
+  Zap,
+  ZapOff,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -39,98 +43,23 @@ export const CheckInPage: React.FC = () => {
   const [isScanningAnimation, setIsScanningAnimation] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [torchOn, setTorchOn] = useState(false);
+  const [hasTorch, setHasTorch] = useState(false);
+  const [lastScannedPreview, setLastScannedPreview] = useState<string | null>(null);
 
-  const videoRef = React.useRef<HTMLVideoElement | null>(null);
-  const streamRef = React.useRef<MediaStream | null>(null);
-  const scanIntervalRef = React.useRef<any>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const isProcessingRef = useRef<boolean>(false);
+  const lastScanTimestampRef = useRef<number>(0);
+  const lastScannedValueRef = useRef<string>('');
 
   const approvedList = registrations.filter((r) => r.status === 'Approved' && r.ticketId);
 
-  // Live Camera Scanner Toggle
-  const startCamera = async () => {
-    setCameraError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-      setCameraActive(true);
-
-      // Start BarcodeDetector if supported
-      if ('BarcodeDetector' in window) {
-        const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['qr_code', 'code_128', 'code_39'] });
-        scanIntervalRef.current = setInterval(async () => {
-          if (videoRef.current && videoRef.current.readyState >= 2) {
-            try {
-              const barcodes = await barcodeDetector.detect(videoRef.current);
-              if (barcodes && barcodes.length > 0) {
-                const scannedRaw = barcodes[0].rawValue;
-                if (scannedRaw) {
-                  stopCamera();
-                  handleBarcodeScanned(scannedRaw);
-                }
-              }
-            } catch (e) {
-              // frame decode pass
-            }
-          }
-        }, 300);
-      }
-    } catch (err: any) {
-      setCameraError(err?.message || 'Unable to access device camera. Please allow camera permissions.');
-      setCameraActive(false);
-    }
-  };
-
-  const stopCamera = () => {
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setCameraActive(false);
-  };
-
-  React.useEffect(() => {
-    return () => {
-      stopCamera();
-    };
-  }, []);
-
-  const handleBarcodeScanned = (scannedValue: string) => {
-    setIsScanningAnimation(true);
-    setTimeout(() => {
-      const result = scanTicket(scannedValue);
-      setIsScanningAnimation(false);
-
-      if (result.status === 'valid') {
-        playSound('success');
-        confetti({
-          particleCount: 50,
-          spread: 70,
-          origin: { y: 0.7 },
-          colors: ['#10b981', '#34d399', '#f43f5e', '#ffffff'],
-        });
-      } else if (result.status === 'already_used') {
-        playSound('warning');
-      } else {
-        playSound('error');
-      }
-    }, 200);
-  };
-
   // Trigger audio feedback effect using Web Audio API synthesized tone
-  const playSound = (type: 'success' | 'warning' | 'error') => {
+  const playSound = useCallback((type: 'success' | 'warning' | 'error') => {
     if (!soundEnabled) return;
     try {
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -162,6 +91,219 @@ export const CheckInPage: React.FC = () => {
       }
     } catch {
       // AudioContext not allowed before user interaction
+    }
+  }, [soundEnabled]);
+
+  const handleBarcodeScanned = useCallback((scannedValue: string) => {
+    const trimmed = scannedValue.trim();
+    if (!trimmed) return;
+
+    // Haptic vibration feedback on iPhone / mobile
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try {
+        navigator.vibrate([60, 40, 60]);
+      } catch {}
+    }
+
+    setLastScannedPreview(trimmed);
+    setIsScanningAnimation(true);
+
+    setTimeout(() => {
+      const result = scanTicket(trimmed);
+      setIsScanningAnimation(false);
+
+      if (result.status === 'valid') {
+        playSound('success');
+        confetti({
+          particleCount: 50,
+          spread: 70,
+          origin: { y: 0.7 },
+          colors: ['#10b981', '#34d399', '#f43f5e', '#ffffff'],
+        });
+      } else if (result.status === 'already_used') {
+        playSound('warning');
+      } else {
+        playSound('error');
+      }
+    }, 150);
+  }, [scanTicket, playSound]);
+
+  // Frame processing loop for QR decoding (Works 100% on iPhone iOS Safari, Chrome, etc.)
+  const scanFrame = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current) {
+      animationFrameRef.current = requestAnimationFrame(scanFrame);
+      return;
+    }
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+      if (!isProcessingRef.current) {
+        const now = Date.now();
+        // Decode frame every 120ms to save CPU & battery on iPhone
+        if (now - lastScanTimestampRef.current > 120) {
+          lastScanTimestampRef.current = now;
+          isProcessingRef.current = true;
+
+          try {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            
+            if (ctx) {
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+              // Use jsQR (Universal pure JS decoding engine)
+              const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: 'attemptBoth',
+              });
+
+              if (code && code.data && code.data.trim()) {
+                const detectedString = code.data.trim();
+                // Prevent duplicate rapid scans of same QR pass within 2.5 seconds
+                if (detectedString !== lastScannedValueRef.current || now - lastScanTimestampRef.current > 2500) {
+                  lastScannedValueRef.current = detectedString;
+                  handleBarcodeScanned(detectedString);
+                }
+              }
+            }
+          } catch (err) {
+            // Ignore frame capture hiccups
+          } finally {
+            isProcessingRef.current = false;
+          }
+        }
+      }
+    }
+
+    animationFrameRef.current = requestAnimationFrame(scanFrame);
+  }, [handleBarcodeScanned]);
+
+  // Stop camera stream & frame loop
+  const stopCamera = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraActive(false);
+    setTorchOn(false);
+    setHasTorch(false);
+  }, []);
+
+  // Start live camera with iOS Safari compatibility & fallback constraints
+  const startCamera = useCallback(async (preferredFacing: 'environment' | 'user' = facingMode) => {
+    stopCamera();
+    setCameraError(null);
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraError('Camera API is not supported by this browser. Please use a modern browser on HTTPS or Safari.');
+      return;
+    }
+
+    let stream: MediaStream | null = null;
+
+    // Constraint attempts (optimized for iPhone Safari environment lens)
+    const constraintOptions = [
+      {
+        video: {
+          facingMode: { ideal: preferredFacing },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      },
+      {
+        video: {
+          facingMode: preferredFacing,
+        },
+        audio: false,
+      },
+      {
+        video: true,
+        audio: false,
+      },
+    ];
+
+    for (const constraints of constraintOptions) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        if (stream) break;
+      } catch (e) {
+        // Try next fallback constraint
+      }
+    }
+
+    if (!stream) {
+      setCameraError('Unable to access device camera. Please make sure camera permissions are allowed in Safari settings.');
+      setCameraActive(false);
+      return;
+    }
+
+    streamRef.current = stream;
+
+    // Check torch capability
+    const track = stream.getVideoTracks()[0];
+    if (track && typeof track.getCapabilities === 'function') {
+      try {
+        const capabilities: any = track.getCapabilities();
+        if (capabilities.torch) {
+          setHasTorch(true);
+        }
+      } catch {}
+    }
+
+    if (videoRef.current) {
+      const video = videoRef.current;
+      video.srcObject = stream;
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('webkit-playsinline', 'true');
+      video.muted = true;
+      video.playsInline = true;
+
+      try {
+        await video.play();
+      } catch (err: any) {
+        console.warn('Video play error on iOS:', err);
+      }
+    }
+
+    setCameraActive(true);
+    // Start scanning frame loop
+    animationFrameRef.current = requestAnimationFrame(scanFrame);
+  }, [facingMode, scanFrame, stopCamera]);
+
+  // Torch Toggle
+  const toggleTorch = async () => {
+    if (!streamRef.current) return;
+    const track = streamRef.current.getVideoTracks()[0];
+    if (!track) return;
+
+    try {
+      const nextTorch = !torchOn;
+      await (track as any).applyConstraints({
+        advanced: [{ torch: nextTorch }],
+      });
+      setTorchOn(nextTorch);
+    } catch (e) {
+      console.warn('Torch constraint toggle failed:', e);
+    }
+  };
+
+  // Flip camera between front and rear
+  const flipCamera = () => {
+    const nextFacing = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(nextFacing);
+    if (cameraActive) {
+      startCamera(nextFacing);
     }
   };
 
@@ -200,6 +342,9 @@ export const CheckInPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Hidden offscreen canvas for iOS & cross-browser QR frame decoding */}
+      <canvas ref={canvasRef} className="hidden" />
+
       {/* Top Console Bar */}
       <div className="bg-slate-900 text-white p-5 rounded-2xl border border-slate-800 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -301,6 +446,34 @@ export const CheckInPage: React.FC = () => {
               <div className="absolute bottom-4 left-4 w-7 h-7 border-b-3 border-l-3 border-rose-500 rounded-bl-lg z-20" />
               <div className="absolute bottom-4 right-4 w-7 h-7 border-b-3 border-r-3 border-rose-500 rounded-br-lg z-20" />
 
+              {/* In-Camera Floating Quick Action Overlays (Torch & Flip) */}
+              {cameraActive && (
+                <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5">
+                  {hasTorch && (
+                    <button
+                      type="button"
+                      onClick={toggleTorch}
+                      className={`p-2 rounded-xl backdrop-blur-md transition-all cursor-pointer ${
+                        torchOn
+                          ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/50'
+                          : 'bg-black/60 text-slate-300 hover:text-white border border-white/20'
+                      }`}
+                      title={torchOn ? 'Turn Torch Off' : 'Turn Torch On (Night Mode)'}
+                    >
+                      {torchOn ? <Zap className="w-4 h-4 fill-current" /> : <ZapOff className="w-4 h-4" />}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={flipCamera}
+                    className="p-2 rounded-xl bg-black/60 text-slate-300 hover:text-white border border-white/20 backdrop-blur-md transition-all cursor-pointer"
+                    title={`Switch to ${facingMode === 'environment' ? 'Front' : 'Rear'} Camera`}
+                  >
+                    <SwitchCamera className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               {/* Video Element for live camera feed */}
               <video
                 ref={videoRef}
@@ -326,8 +499,8 @@ export const CheckInPage: React.FC = () => {
                     <QrCode className="w-10 h-10 text-rose-400" />
                   </div>
                   <div className="text-slate-300 text-xs">
-                    <p className="font-semibold text-white">Scanner Viewfinder Ready</p>
-                    <p className="text-[11px] text-slate-400">Position attendee QR pass or use camera</p>
+                    <p className="font-semibold text-white">iPhone & Mobile Scanner Ready</p>
+                    <p className="text-[11px] text-slate-400">Position attendee QR pass inside frame</p>
                   </div>
                 </div>
               )}
@@ -336,9 +509,17 @@ export const CheckInPage: React.FC = () => {
               <div className="absolute inset-0 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px] opacity-30" />
             </div>
 
+            {/* Error & Safari Permission Guidance Banner */}
             {cameraError && (
-              <div className="mt-3 p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs text-center max-w-sm">
-                {cameraError}
+              <div className="mt-3 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs text-left max-w-sm space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-rose-900">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Camera Access Notice</span>
+                </div>
+                <p>{cameraError}</p>
+                <p className="text-[11px] text-rose-600 font-medium">
+                  Tip: On iPhone Safari, tap the <strong>"aA"</strong> icon in the address bar → <strong>Website Settings</strong> → Set <strong>Camera</strong> to <strong>Allow</strong>.
+                </p>
               </div>
             )}
 
@@ -346,7 +527,7 @@ export const CheckInPage: React.FC = () => {
             <div className="mt-6 flex flex-col sm:flex-row items-center gap-2.5 w-full max-w-sm">
               <button
                 type="button"
-                onClick={cameraActive ? stopCamera : startCamera}
+                onClick={cameraActive ? stopCamera : () => startCamera()}
                 className={`flex-1 w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs shadow-md transition-all cursor-pointer ${
                   cameraActive
                     ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-600/20'
