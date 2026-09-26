@@ -86,47 +86,69 @@ export async function sendWhatsAppTicketPass(params: SendWhatsAppTicketParams): 
   }
 }
 
+import { parsePhoneNumberFromString, isValidPhoneNumber } from 'libphonenumber-js';
+
 /**
- * Checks whether a phone number is registered on WhatsApp Cloud API
+ * Validates international phone number based on country code and digit count
  */
-export async function verifyWhatsAppNumber(phone: string, name?: string): Promise<{
+export function validateInternationalPhone(phone: string): {
   valid: boolean;
+  formatted?: string;
   error?: string;
-  recipient?: string;
-}> {
-  const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
-  if (!cleanPhone || cleanPhone.length < 8) {
-    return { valid: false, error: 'Please enter a valid phone number with country code.' };
+} {
+  const raw = (phone || '').trim();
+  if (!raw) {
+    return { valid: false, error: 'Phone number is required.' };
   }
 
+  // Ensure country code has '+' prefix
+  const normalized = raw.startsWith('+') ? raw : `+${raw}`;
+
   try {
-    const response = await fetch('/api/verify-whatsapp', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ phone: cleanPhone, name }),
-    });
-
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok || !data.validWhatsApp) {
+    const parsed = parsePhoneNumberFromString(normalized);
+    if (!parsed || !parsed.isValid()) {
       return {
         valid: false,
-        error: data.error || 'This phone number does not have an active WhatsApp account. Please check your number.',
+        error: 'Please enter a valid phone number with the correct number of digits for your selected country.',
       };
     }
 
     return {
       valid: true,
-      recipient: cleanPhone,
+      formatted: parsed.formatInternational(),
     };
-  } catch (err: any) {
-    console.error('WhatsApp verify network error:', err);
+  } catch {
+    // Fallback digit count validation
+    const digits = raw.replace(/[^0-9]/g, '');
+    if (digits.length >= 8 && digits.length <= 15) {
+      return { valid: true, formatted: normalized };
+    }
     return {
       valid: false,
-      error: 'WhatsApp verification service is unreachable. Please check your connection and try again.',
+      error: 'Invalid phone number length. International numbers must contain between 8 and 15 digits.',
     };
   }
+}
+
+/**
+ * Formats and validates phone number without requiring external WhatsApp API lookup
+ */
+export async function verifyWhatsAppNumber(phone: string, _name?: string): Promise<{
+  valid: boolean;
+  error?: string;
+  recipient?: string;
+}> {
+  const result = validateInternationalPhone(phone);
+  if (!result.valid) {
+    return {
+      valid: false,
+      error: result.error || 'Please enter a valid phone number with correct digits.',
+    };
+  }
+
+  return {
+    valid: true,
+    recipient: result.formatted || phone,
+  };
 }
 

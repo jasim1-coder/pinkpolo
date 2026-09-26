@@ -108,33 +108,14 @@ export const TopBar: React.FC<TopBarProps> = ({
           </button>
         )}
 
-        {/* Google Workspace Gmail Connection Indicator */}
-        {hasGmailAuth ? (
-          <div
-            className="hidden lg:inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200/80 rounded-xl text-xs font-medium shadow-2xs"
-            title={`Connected as ${currentUser?.email || 'Google User'}. Automatic approval emails are active.`}
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="max-w-[130px] truncate font-medium">
-              {currentUser?.email?.split('@')[0] || 'Gmail'}
-            </span>
-            <button
-              type="button"
-              onClick={signOutGoogle}
-              className="text-[10px] text-emerald-700 hover:text-emerald-950 underline cursor-pointer ml-0.5 font-semibold"
-              title="Disconnect Google account"
-            >
-              Disconnect
-            </button>
-          </div>
-        ) : (
-          <GoogleAuthButton
-            onClick={signInWithGoogle}
-            isLoading={isLoadingAuth}
-            label="Connect Gmail"
-            className="py-1.5 px-3 text-xs hidden sm:inline-flex rounded-xl shadow-2xs"
-          />
-        )}
+        {/* Mailgun Transactional Email Delivery Indicator */}
+        <div
+          className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs shadow-2xs font-mono"
+          title="Automated email delivery active via event@bf.simplelogicit.com (Mailgun EU API)"
+        >
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-[11px] font-medium text-slate-600">event@bf.simplelogicit.com</span>
+        </div>
 
         {/* Activity Notifications Bell */}
         <div className="relative" ref={notifRef}>

@@ -31,7 +31,7 @@ import poloBannerImg from '../../assets/images/pink_polo_banner_1790157590237.jp
 import ghantootLogo from '../../assets/images/ghantoot_polo_logo.png';
 import confetti from 'canvas-confetti';
 
-import { sendWhatsAppTicketPass, verifyWhatsAppNumber } from '../../services/whatsappService';
+import { sendWhatsAppTicketPass, validateInternationalPhone, getGateForTier } from '../../services/whatsappService';
 
 interface PublicRegistrationPortalProps {
   isStandalonePublic?: boolean;
@@ -83,39 +83,39 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
     perks: string[];
     badge: string;
   }[] = [
-    {
-      id: 'VIP Pavilion',
-      name: 'VIP Pavilion',
-      gate: 'Gate 1 (Royal Turnstile)',
-      tagline: 'Royal enclosure, gourmet dining & player meet',
-      perks: ['Royal enclosure seating', 'Gourmet dining & bar', 'Fast-track Gate 1 access'],
-      badge: 'Royal Access',
-    },
-    {
-      id: 'Clubhouse Lounge',
-      name: 'Clubhouse Lounge',
-      gate: 'Gate 2 (South Entry)',
-      tagline: 'Climate terrace with panoramic field view',
-      perks: ['Indoor climate terrace', 'Dedicated bar service', 'Official event gift bag'],
-      badge: 'Popular',
-    },
-    {
-      id: 'Garden Terrace',
-      name: 'Garden Terrace',
-      gate: 'Gate 3 (Terrace Gate)',
-      tagline: 'Field-side lawn tables with afternoon tea',
-      perks: ['Field-side lawn tables', 'Afternoon tea buffet', 'Access to gala market'],
-      badge: 'Social & Dining',
-    },
-    {
-      id: 'Grandstand',
-      name: 'Grandstand',
-      gate: 'Gate 4 (East Turnstile)',
-      tagline: 'Open spectator grandstand seating',
-      perks: ['Central field view', 'Food village access', 'Opening ceremony access'],
-      badge: 'Spectator',
-    },
-  ];
+      {
+        id: 'VIP Pavilion',
+        name: 'VIP Pavilion',
+        gate: 'Gate 1 (Royal Turnstile)',
+        tagline: 'Royal enclosure, gourmet dining & player meet',
+        perks: ['Royal enclosure seating', 'Gourmet dining & bar', 'Fast-track Gate 1 access'],
+        badge: 'Royal Access',
+      },
+      {
+        id: 'Clubhouse Lounge',
+        name: 'Clubhouse Lounge',
+        gate: 'Gate 2 (South Entry)',
+        tagline: 'Climate terrace with panoramic field view',
+        perks: ['Indoor climate terrace', 'Dedicated bar service', 'Official event gift bag'],
+        badge: 'Popular',
+      },
+      {
+        id: 'Garden Terrace',
+        name: 'Garden Terrace',
+        gate: 'Gate 3 (Terrace Gate)',
+        tagline: 'Field-side lawn tables with afternoon tea',
+        perks: ['Field-side lawn tables', 'Afternoon tea buffet', 'Access to gala market'],
+        badge: 'Social & Dining',
+      },
+      {
+        id: 'Grandstand',
+        name: 'Grandstand',
+        gate: 'Gate 4 (East Turnstile)',
+        tagline: 'Open spectator grandstand seating',
+        perks: ['Central field view', 'Food village access', 'Opening ceremony access'],
+        badge: 'Spectator',
+      },
+    ];
 
   const currentTierInfo = tiers.find((t) => t.id === selectedTier) || tiers[0];
 
@@ -144,29 +144,29 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
     setIsSubmitting(true);
     const fullPhone = `${countryCode} ${phoneLocal.trim()}`;
 
-    // Real-time verification with Meta WhatsApp Cloud API
-    const verifyRes = await verifyWhatsAppNumber(fullPhone, fullName.trim());
+    // Validate phone number format & digit count based on international standard for selected country
+    const phoneCheck = validateInternationalPhone(fullPhone);
 
-    if (!verifyRes.valid) {
+    if (!phoneCheck.valid) {
       setIsSubmitting(false);
       setIsPhoneInvalid(true);
       setErrorMsg(
-        verifyRes.error ||
-          'The phone number provided does not appear to be registered on WhatsApp. Please check the number or provide an active WhatsApp number.'
+        phoneCheck.error ||
+        'Please enter a valid phone number with the correct number of digits for your selected country.'
       );
       addToast(
         'warning',
-        'WhatsApp Number Required',
-        'Please enter an active WhatsApp number so your digital pass can be delivered.'
+        'Invalid Phone Number',
+        phoneCheck.error || 'Please enter a valid phone number matching your country.'
       );
       return;
     }
 
-    // All form values are valid and verified on WhatsApp -> proceed with registration
+    // All form values are valid -> proceed with registration
     const newReg = submitAttendeeRegistration({
       name: fullName.trim(),
       email: email.trim(),
-      whatsapp: fullPhone,
+      whatsapp: phoneCheck.formatted || fullPhone,
       tier: selectedTier,
       company: organization.trim() || undefined,
       notes: notes.trim() ? `${notes.trim()} (Party: ${guestCount})` : `Party: ${guestCount}`,
@@ -357,14 +357,18 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                     </div>
                   </div>
 
-                  <div>
+                  <div className="sm:col-span-2">
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="block text-xs sm:text-sm font-semibold text-stone-700">
                         WhatsApp Number <span className="text-rose-600">*</span>
                       </label>
-                      {isPhoneInvalid && (
-                        <span className="text-xs text-rose-600 font-bold">
-                          Not found on WhatsApp
+                      {isPhoneInvalid ? (
+                        <span className="text-xs text-rose-600 font-semibold">
+                          Invalid phone format for country
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-stone-500">
+                          Include active WhatsApp number
                         </span>
                       )}
                     </div>
@@ -376,21 +380,26 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                           setIsPhoneInvalid(false);
                           setErrorMsg('');
                         }}
-                        className="text-xs sm:text-sm px-2.5 sm:px-3 py-3 sm:py-3.5 bg-stone-50/70 border border-stone-200 rounded-xl focus:outline-none focus:border-rose-500 text-stone-700 font-mono"
+                        className="text-xs sm:text-sm px-2.5 sm:px-3 py-3 sm:py-3.5 bg-stone-50/70 border border-stone-200 rounded-xl focus:outline-none focus:border-rose-500 text-stone-700 font-mono shrink-0"
                       >
-                        <option value="+971">AE +971</option>
-                        <option value="+974">QA +974</option>
-                        <option value="+966">SA +966</option>
-                        <option value="+965">KW +965</option>
-                        <option value="+973">BH +973</option>
-                        <option value="+968">OM +968</option>
-                        <option value="+44">UK +44</option>
-                        <option value="+1">US +1</option>
+                        <option value="+971">🇦🇪 UAE +971</option>
+                        <option value="+966">🇸🇦 KSA +966</option>
+                        <option value="+974">🇶🇦 Qatar +974</option>
+                        <option value="+965">🇰🇼 Kuwait +965</option>
+                        <option value="+968">🇴🇲 Oman +968</option>
+                        <option value="+973">🇧🇭 Bahrain +973</option>
+                        <option value="+91">🇮🇳 India +91</option>
+                        <option value="+92">🇵🇰 Pakistan +92</option>
+                        <option value="+20">🇪🇬 Egypt +20</option>
+                        <option value="+962">🇯🇴 Jordan +962</option>
+                        <option value="+961">🇱🇧 Lebanon +961</option>
+                        <option value="+44">🇬🇧 UK +44</option>
+                        <option value="+1">🇺🇸 US/CA +1</option>
+                        <option value="+63">🇵🇭 Philippines +63</option>
                       </select>
                       <div className="relative flex-1">
-                        <Phone className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none ${
-                          isPhoneInvalid ? 'text-rose-500' : 'text-stone-400'
-                        }`} />
+                        <Phone className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none ${isPhoneInvalid ? 'text-rose-500' : 'text-stone-400'
+                          }`} />
                         <input
                           type="tel"
                           required
@@ -400,14 +409,28 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                             setIsPhoneInvalid(false);
                             setErrorMsg('');
                           }}
-                          placeholder="5512 3456"
-                          className={`w-full text-xs sm:text-sm pl-10 pr-3.5 py-3 sm:py-3.5 rounded-xl focus:outline-none font-mono transition-colors ${
-                            isPhoneInvalid
-                              ? 'bg-rose-50/50 border border-rose-400 text-rose-900 focus:bg-white focus:border-rose-500'
-                              : 'bg-stone-50/70 border border-stone-200 focus:bg-white focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 text-stone-900'
-                          }`}
+                          placeholder={
+                            countryCode === '+971'
+                              ? '50 123 4567'
+                              : countryCode === '+966'
+                              ? '50 123 4567'
+                              : countryCode === '+91'
+                              ? '98765 43210'
+                              : countryCode === '+1'
+                              ? '202 555 0123'
+                              : 'Phone digits'
+                          }
+                          className={`w-full text-xs sm:text-sm pl-10 pr-3.5 py-3 sm:py-3.5 rounded-xl focus:outline-none font-mono transition-colors ${isPhoneInvalid
+                            ? 'bg-rose-50/50 border border-rose-400 text-rose-900 focus:bg-white focus:border-rose-500'
+                            : 'bg-stone-50/70 border border-stone-200 focus:bg-white focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 text-stone-900'
+                            }`}
                         />
                       </div>
+                    </div>
+                    {/* Simple WhatsApp notice */}
+                    <div className="mt-2 text-[11.5px] text-amber-800 bg-amber-50/90 border border-amber-200/80 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
+                      <span className="font-semibold text-amber-900 shrink-0">⚠️ Notice:</span>
+                      <span>Please strictly provide an active WhatsApp number to receive your digital pass and QR code.</span>
                     </div>
                   </div>
 
@@ -447,22 +470,20 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                           type="button"
                           key={tier.id}
                           onClick={() => setSelectedTier(tier.id)}
-                          className={`p-3 sm:p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-                            isSelected
-                              ? 'border-2 border-rose-500 bg-rose-50/80 ring-2 ring-rose-500/20 shadow-xs'
-                              : 'border-stone-200 bg-stone-50/50 hover:bg-stone-50 hover:border-stone-300'
-                          }`}
+                          className={`p-3 sm:p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${isSelected
+                            ? 'border-2 border-rose-500 bg-rose-50/80 ring-2 ring-rose-500/20 shadow-xs'
+                            : 'border-stone-200 bg-stone-50/50 hover:bg-stone-50 hover:border-stone-300'
+                            }`}
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-xs sm:text-sm font-bold text-stone-900 leading-tight">
                               {tier.name}
                             </span>
                             <span
-                              className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                                isSelected
-                                  ? 'border-rose-600 bg-rose-600'
-                                  : 'border-stone-300 bg-white'
-                              }`}
+                              className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${isSelected
+                                ? 'border-rose-600 bg-rose-600'
+                                : 'border-stone-300 bg-white'
+                                }`}
                             >
                               {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                             </span>
@@ -650,11 +671,10 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800">Application Status</span>
                   <span
-                    className={`text-[11px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${
-                      liveReg.status === 'Approved'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-amber-100 text-amber-800'
-                    }`}
+                    className={`text-[11px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${liveReg.status === 'Approved'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-amber-100 text-amber-800'
+                      }`}
                   >
                     {liveReg.status === 'Approved' ? '✓ Approved' : 'Pending Review'}
                   </span>
@@ -799,11 +819,10 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                   <button
                     type="button"
                     onClick={() => setPreviewTab('whatsapp')}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
-                      previewTab === 'whatsapp'
-                        ? 'bg-emerald-600 text-white shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${previewTab === 'whatsapp'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                      }`}
                   >
                     <Smartphone className="w-3 h-3" />
                     <span>WhatsApp</span>
@@ -811,11 +830,10 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                   <button
                     type="button"
                     onClick={() => setPreviewTab('email')}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
-                      previewTab === 'email'
-                        ? 'bg-slate-900 text-white shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${previewTab === 'email'
+                      ? 'bg-slate-900 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                      }`}
                   >
                     <Mail className="w-3 h-3" />
                     <span>Email</span>

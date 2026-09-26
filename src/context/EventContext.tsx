@@ -9,7 +9,7 @@ import {
   logActivityToFirestore,
 } from '../services/firebaseDb';
 import { sendWhatsAppTicketPass, getGateForTier } from '../services/whatsappService';
-import { sendTicketEmailViaGmail } from '../services/gmailService';
+import { sendTicketEmailViaMailgun } from '../services/mailgunService';
 
 export interface ScanResult {
   status: 'valid' | 'already_used' | 'invalid';
@@ -524,9 +524,9 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }).catch((e) => console.error('WhatsApp dispatch error:', e));
     }
 
-    // Automatically Dispatch Official HTML Pass via Gmail API (if connected)
+    // Automatically Dispatch Official HTML Pass via Mailgun API
     if (updatedReg.email) {
-      sendTicketEmailViaGmail({
+      sendTicketEmailViaMailgun({
         toEmail: updatedReg.email,
         attendeeName: updatedReg.name,
         ticketId: updatedReg.ticketId!,
@@ -535,7 +535,9 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         qrValue: updatedReg.qrValue || `PINK-POLO-2026-${updatedReg.ticketId}`,
       }).then((res) => {
         if (res.success) {
-          addToast('success', 'Email Pass Sent via Gmail', `Official pass delivered to ${updatedReg.email}`);
+          addToast('success', 'Email Pass Sent via Mailgun', `Official pass delivered to ${updatedReg.email} from event@bf.simplelogicit.com`);
+        } else {
+          console.log('[Mailgun Dispatch Info]', res.error);
         }
       }).catch((e) => console.error('Email dispatch error:', e));
     }

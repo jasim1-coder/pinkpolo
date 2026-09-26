@@ -7,6 +7,7 @@ import {
   getAccessToken,
   setCachedAccessToken,
 } from '../services/googleAuth';
+import { sendTicketEmailViaMailgun } from '../services/mailgunService';
 import { sendRealApprovalEmail } from '../services/gmailService';
 import { Registration } from '../types';
 
@@ -33,7 +34,7 @@ const GmailContext = createContext<GmailContextType | undefined>(undefined);
 
 export const GmailProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [hasGmailAuth, setHasGmailAuth] = useState<boolean>(false);
+  const [hasGmailAuth, setHasGmailAuth] = useState<boolean>(true); // Mailgun is active by default
   const [isLoadingAuth, setIsLoadingAuth] = useState<boolean>(false);
   const [autoSendOnApprove, setAutoSendOnApprove] = useState<boolean>(true);
 
@@ -52,11 +53,11 @@ export const GmailProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const unsubscribe = initAuth(
       (user, token) => {
         setCurrentUser(user);
-        setHasGmailAuth(!!token);
+        setHasGmailAuth(true);
       },
       () => {
         setCurrentUser(null);
-        setHasGmailAuth(false);
+        setHasGmailAuth(true); // Mailgun service is active backend-wide
       }
     );
     return () => {
@@ -85,7 +86,7 @@ export const GmailProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const signOutGoogle = useCallback(async () => {
     await logoutGoogle();
     setCurrentUser(null);
-    setHasGmailAuth(false);
+    setHasGmailAuth(true);
   }, []);
 
   const sendEmailForRegistration = useCallback(
@@ -93,14 +94,6 @@ export const GmailProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       reg: Registration,
       skipConfirm = false
     ): Promise<{ success: boolean; message?: string }> => {
-      const token = await getAccessToken();
-      if (!token) {
-        return {
-          success: false,
-          message: 'Google authorization required. Please connect your Gmail account.',
-        };
-      }
-
       const getGateForTier = (tier: string) => {
         if (tier.includes('VIP')) return 'Gate 1 (Royal Pavilion Turnstile)';
         if (tier.includes('Clubhouse')) return 'Gate 2 (Clubhouse South Entry)';
@@ -111,7 +104,8 @@ export const GmailProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const ticketId = reg.ticketId || `PINK-2026-${reg.id.replace('REG-2026-', '')}`;
       const qrValue = reg.qrValue || `PINK-POLO-2026-${ticketId}-${reg.name.toUpperCase().replace(/\s+/g, '-')}`;
 
-      const res = await sendRealApprovalEmail({
+      // First attempt: Mailgun automated transactional delivery
+      const res = await sendTicketEmailViaMailgun({
         toEmail: reg.email,
         attendeeName: reg.name,
         ticketId,
@@ -123,14 +117,33 @@ export const GmailProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (res.success) {
         return {
           success: true,
-          message: `Official pass delivered to ${reg.email} via Gmail (Message ID: ${res.messageId})`,
-        };
-      } else {
-        return {
-          success: false,
-          message: res.error || 'Failed to send email via Gmail.',
+          message: `Official pass delivered to ${reg.email} via Mailgun (ID: ${res.messageId || 'Delivered'})`,
         };
       }
+
+      // Optional Fallback: If user had Google Auth connected, try Gmail API
+      const token = await getAccessToken();
+      if (token) {
+        const gmailRes = await sendRealApprovalEmail({
+          toEmail: reg.email,
+          attendeeName: reg.name,
+          ticketId,
+          tier: reg.tier,
+          assignedGate: getGateForTier(reg.tier),
+          qrValue,
+        });
+        if (gmailRes.success) {
+          return {
+            success: true,
+            message: `Official pass delivered to ${reg.email} via Gmail`,
+          };
+        }
+      }
+
+      return {
+        success: false,
+        message: res.error || 'Failed to send email via Mailgun.',
+      };
     },
     []
   );

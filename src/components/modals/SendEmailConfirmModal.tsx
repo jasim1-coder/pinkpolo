@@ -33,18 +33,18 @@ export const SendEmailConfirmModal: React.FC = () => {
       await confirmSendEmail();
       addToast(
         'success',
-        'Real Email Dispatched via Gmail!',
+        'Email Dispatched via Mailgun!',
         `Official admission pass & QR code sent to ${reg.email}`
       );
       addActivity(
         'approval',
-        'Real Email Sent via Gmail API',
-        `Pass sent to ${reg.email} (${reg.name}) from ${currentUser?.email || 'connected Gmail'}`,
+        'Official Email Sent via Mailgun',
+        `Pass sent to ${reg.email} (${reg.name}) from event@bf.simplelogicit.com`,
         reg.name,
         reg.ticketId
       );
     } catch (err: any) {
-      addToast('error', 'Failed to Send Email', err?.message || 'Gmail API Error');
+      addToast('error', 'Failed to Send Email', err?.message || 'Mailgun API Error');
     }
   };
 
@@ -59,7 +59,7 @@ export const SendEmailConfirmModal: React.FC = () => {
             </div>
             <div>
               <h3 className="text-sm font-bold tracking-tight">Confirm Real Email Dispatch</h3>
-              <p className="text-[11px] text-rose-200">Google Workspace Gmail API</p>
+              <p className="text-[11px] text-rose-200">Mailgun Transactional Service</p>
             </div>
           </div>
           <button
@@ -80,7 +80,7 @@ export const SendEmailConfirmModal: React.FC = () => {
                 Send official admission pass to <u>{reg.email}</u>?
               </p>
               <p className="text-[11px] text-rose-700">
-                This will send a real, live HTML email from your connected Google account with the scannable turnstile QR code and arrival guide.
+                This will send an official HTML admission pass with the scannable turnstile QR code and arrival guide directly from <strong>event@bf.simplelogicit.com</strong>.
               </p>
             </div>
           </div>
@@ -103,7 +103,7 @@ export const SendEmailConfirmModal: React.FC = () => {
             </div>
             <div className="pt-2 border-t border-slate-200 text-[11px] flex items-center justify-between text-slate-500">
               <span>Sender Account:</span>
-              <strong className="text-slate-700 font-mono">{currentUser?.email || 'Your Google Account'}</strong>
+              <strong className="text-rose-700 font-mono">event@bf.simplelogicit.com</strong>
             </div>
           </div>
 
@@ -126,12 +126,12 @@ export const SendEmailConfirmModal: React.FC = () => {
               {emailConfirmationModal.isSending ? (
                 <>
                   <Sparkles className="w-3.5 h-3.5 animate-spin" />
-                  <span>Sending via Gmail...</span>
+                  <span>Sending via Mailgun...</span>
                 </>
               ) : (
                 <>
                   <Send className="w-3.5 h-3.5" />
-                  <span>Confirm & Send Real Email</span>
+                  <span>Confirm & Send Pass</span>
                 </>
               )}
             </button>
