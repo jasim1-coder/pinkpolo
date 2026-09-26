@@ -27,6 +27,14 @@ export default async function handler(req, res) {
     const host = process.env.MAILGUN_HOST || 'api.eu.mailgun.net';
     const fromEmail = process.env.MAILGUN_FROM_EMAIL || 'Pink Polo 2026 <event@bf.simplelogicit.com>';
 
+    if (!apiKey) {
+      console.error('Mailgun API Key missing in environment variables');
+      return res.status(500).json({
+        success: false,
+        error: 'MAILGUN_API_KEY is missing in Vercel Environment Variables. Please add MAILGUN_API_KEY to your Vercel project settings and redeploy.',
+      });
+    }
+
     const rawQr = qrValue || `PINK-POLO-2026-${ticketId || 'PASS'}`;
     const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data=${encodeURIComponent(
       rawQr

@@ -349,6 +349,14 @@ async function startServer() {
       const host = process.env.MAILGUN_HOST || 'api.eu.mailgun.net';
       const fromEmail = process.env.MAILGUN_FROM_EMAIL || 'Pink Polo 2026 <event@bf.simplelogicit.com>';
 
+      if (!apiKey) {
+        res.status(500).json({
+          success: false,
+          error: 'MAILGUN_API_KEY is not set in .env. Please set MAILGUN_API_KEY in your .env file.',
+        });
+        return;
+      }
+
       const rawQr = qrValue || `PINK-POLO-2026-${ticketId || 'PASS'}`;
       const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data=${encodeURIComponent(
         rawQr

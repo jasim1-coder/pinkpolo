@@ -40,6 +40,7 @@ export const RegistrationDetailModal: React.FC = () => {
   const [rejectPromptOpen, setRejectPromptOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('Capacity limit reached for selected afternoon session slot');
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   if (!selectedRegistration) return null;
 
@@ -91,8 +92,6 @@ export const RegistrationDetailModal: React.FC = () => {
       setIsSendingWhatsApp(false);
     }
   };
-
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const handleEmailShare = async () => {
     if (!reg.email) {

@@ -506,52 +506,59 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     addToast('success', 'Registration Approved & Ticket Issued', `Ticket ID: ${ticketId} issued for ${reg.name}`);
 
-    // In a single click: Automatically dispatch BOTH WhatsApp Pass and Mailgun Pass
-    if (updatedReg.whatsapp) {
-      sendWhatsAppTicketPass({
-        toPhone: updatedReg.whatsapp,
-        attendeeName: updatedReg.name,
-        ticketId: updatedReg.ticketId!,
-        tier: updatedReg.tier,
-        gate: getGateForTier(updatedReg.tier),
-        qrValue: updatedReg.qrValue || `PINK-POLO-2026-${updatedReg.ticketId}`,
-      }).then((res) => {
-        if (res.success) {
-          addToast('success', 'WhatsApp Pass Dispatched!', `Official QR ticket pass sent to ${updatedReg.whatsapp}`);
-        } else if (res.whatsappUrl) {
-          // Open WhatsApp web/app directly as automatic backup
-          window.open(res.whatsappUrl, '_blank');
-          addToast('info', 'WhatsApp Pass Opened', `Launched WhatsApp chat for ${updatedReg.whatsapp}`);
-        } else {
-          console.warn('[WhatsApp Dispatch Error]', res.error);
-          addToast('warning', 'WhatsApp Delivery Notice', res.error || 'WhatsApp message could not be delivered.');
-        }
-      }).catch((e) => {
-        console.error('WhatsApp dispatch exception:', e);
-        addToast('error', 'WhatsApp Error', 'Network error sending WhatsApp pass.');
-      });
-    }
+    // In a single click: Sequentially dispatch Email first, then WhatsApp
+    (async () => {
+      // Step 1: Send Official Admission Pass via Mailgun Email
+      if (updatedReg.email) {
+        try {
+          const emailRes = await sendTicketEmailViaMailgun({
+            toEmail: updatedReg.email,
+            attendeeName: updatedReg.name,
+            ticketId: updatedReg.ticketId!,
+            tier: updatedReg.tier,
+            assignedGate: getGateForTier(updatedReg.tier),
+            qrValue: updatedReg.qrValue || `PINK-POLO-2026-${updatedReg.ticketId}`,
+          });
 
-    if (updatedReg.email) {
-      sendTicketEmailViaMailgun({
-        toEmail: updatedReg.email,
-        attendeeName: updatedReg.name,
-        ticketId: updatedReg.ticketId!,
-        tier: updatedReg.tier,
-        assignedGate: getGateForTier(updatedReg.tier),
-        qrValue: updatedReg.qrValue || `PINK-POLO-2026-${updatedReg.ticketId}`,
-      }).then((res) => {
-        if (res.success) {
-          addToast('success', 'Email Pass Dispatched!', `Official pass sent to ${updatedReg.email} from event@bf.simplelogicit.com`);
-        } else {
-          console.warn('[Mailgun Dispatch Error]', res.error);
-          addToast('warning', 'Email Delivery Notice', res.error || 'Email could not be delivered.');
+          if (emailRes.success) {
+            addToast('success', 'Email Pass Dispatched!', `Official pass sent to ${updatedReg.email} from event@bf.simplelogicit.com`);
+          } else {
+            console.warn('[Mailgun Dispatch Notice]', emailRes.error);
+            addToast('warning', 'Email Delivery Notice', emailRes.error || 'Email could not be delivered.');
+          }
+        } catch (emailErr: any) {
+          console.error('Mailgun dispatch exception:', emailErr);
+          addToast('error', 'Email Error', 'Network error sending Mailgun email pass.');
         }
-      }).catch((e) => {
-        console.error('Mailgun dispatch exception:', e);
-        addToast('error', 'Email Error', 'Network error sending Mailgun email pass.');
-      });
-    }
+      }
+
+      // Step 2: Send Official QR Pass via WhatsApp
+      if (updatedReg.whatsapp) {
+        try {
+          const waRes = await sendWhatsAppTicketPass({
+            toPhone: updatedReg.whatsapp,
+            attendeeName: updatedReg.name,
+            ticketId: updatedReg.ticketId!,
+            tier: updatedReg.tier,
+            gate: getGateForTier(updatedReg.tier),
+            qrValue: updatedReg.qrValue || `PINK-POLO-2026-${updatedReg.ticketId}`,
+          });
+
+          if (waRes.success) {
+            addToast('success', 'WhatsApp Pass Dispatched!', `Official QR ticket pass sent to ${updatedReg.whatsapp}`);
+          } else if (waRes.whatsappUrl) {
+            window.open(waRes.whatsappUrl, '_blank');
+            addToast('info', 'WhatsApp Pass Opened', `Launched WhatsApp chat for ${updatedReg.whatsapp}`);
+          } else {
+            console.warn('[WhatsApp Dispatch Notice]', waRes.error);
+            addToast('warning', 'WhatsApp Delivery Notice', waRes.error || 'WhatsApp message could not be delivered.');
+          }
+        } catch (waErr: any) {
+          console.error('WhatsApp dispatch exception:', waErr);
+          addToast('error', 'WhatsApp Error', 'Network error sending WhatsApp pass.');
+        }
+      }
+    })();
 
     // Sync to server API
     fetch('/api/sync', {
