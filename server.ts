@@ -191,6 +191,23 @@ async function startServer() {
       }
 
       const cleanPhone = String(to).replace(/[^0-9]/g, '');
+
+      // If a cloud proxy endpoint (e.g. Vercel deployment) is configured, relay WhatsApp requests through it
+      if (process.env.WHATSAPP_PROXY_URL) {
+        try {
+          const proxyRes = await fetch(process.env.WHATSAPP_PROXY_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body),
+          });
+          const proxyData = (await proxyRes.json().catch(() => ({}))) as any;
+          res.status(proxyRes.status || 200).json(proxyData);
+          return;
+        } catch (proxyErr: any) {
+          console.warn('WhatsApp cloud proxy relay failed, falling back to direct:', proxyErr?.message);
+        }
+      }
+
       const apiVersion = process.env.WHATSAPP_API_VERSION || 'v22.0';
       const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '974899072381634';
       const accessToken =
@@ -228,18 +245,36 @@ async function startServer() {
         },
       };
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
       const url = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
 
-      let metaRes = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(imagePayload),
-      });
+      let metaRes: any = null;
+      let metaData: any = {};
 
-      let metaData = await metaRes.json().catch(() => ({}));
+      try {
+        metaRes = await fetch(url, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(imagePayload),
+        });
+        clearTimeout(timeoutId);
+        metaData = await metaRes.json().catch(() => ({}));
+      } catch (networkErr: any) {
+        clearTimeout(timeoutId);
+        console.warn('Meta WhatsApp Cloud API direct connection timed out on local network:', networkErr?.message);
+        res.status(200).json({
+          success: false,
+          error: 'Meta WhatsApp API direct connection timed out on local network. (Works automatically in cloud deployment).',
+          whatsappUrl: `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(captionBody)}`,
+        });
+        return;
+      }
 
       // Fallback to text payload if image is rejected
       if (!metaRes.ok) {
@@ -255,24 +290,33 @@ async function startServer() {
           },
         };
 
-        metaRes = await fetch(url, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(textPayload),
-        });
+        const retryController = new AbortController();
+        const retryTimeoutId = setTimeout(() => retryController.abort(), 6000);
 
-        metaData = await metaRes.json().catch(() => ({}));
+        try {
+          metaRes = await fetch(url, {
+            method: 'POST',
+            signal: retryController.signal,
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(textPayload),
+          });
+          clearTimeout(retryTimeoutId);
+          metaData = await metaRes.json().catch(() => ({}));
+        } catch {
+          clearTimeout(retryTimeoutId);
+        }
       }
 
-      if (!metaRes.ok) {
+      if (!metaRes || !metaRes.ok) {
         console.error('Meta WhatsApp Cloud API Error:', metaData);
-        res.status(metaRes.status || 500).json({
+        res.status(200).json({
           success: false,
-          error: (metaData as any)?.error?.message || 'Failed to dispatch WhatsApp message',
+          error: (metaData as any)?.error?.message || 'Meta WhatsApp message could not be sent to this number.',
           details: metaData,
+          whatsappUrl: `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(captionBody)}`,
         });
         return;
       }
@@ -286,7 +330,7 @@ async function startServer() {
       });
     } catch (err: any) {
       console.error('WhatsApp Error:', err);
-      res.status(500).json({ success: false, error: err?.message || 'Server error' });
+      res.status(200).json({ success: false, error: err?.message || 'Server error processing WhatsApp pass' });
     }
   });
 

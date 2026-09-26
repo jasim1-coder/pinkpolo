@@ -18,6 +18,7 @@ export interface WhatsAppResponse {
   messageId?: string;
   error?: string;
   recipient?: string;
+  whatsappUrl?: string;
 }
 
 /**
@@ -68,6 +69,7 @@ export async function sendWhatsAppTicketPass(params: SendWhatsAppTicketParams): 
         success: false,
         error: data?.error || `Failed with HTTP status ${response.status}`,
         recipient: cleanPhone,
+        whatsappUrl: data?.whatsappUrl,
       };
     }
 
@@ -75,6 +77,7 @@ export async function sendWhatsAppTicketPass(params: SendWhatsAppTicketParams): 
       success: true,
       messageId: data.messageId,
       recipient: cleanPhone,
+      whatsappUrl: data?.whatsappUrl,
     };
   } catch (err: any) {
     console.error('WhatsApp API Network Exception:', err);

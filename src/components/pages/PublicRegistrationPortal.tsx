@@ -32,6 +32,7 @@ import ghantootLogo from '../../assets/images/ghantoot_polo_logo.png';
 import confetti from 'canvas-confetti';
 
 import { sendWhatsAppTicketPass, validateInternationalPhone, getGateForTier } from '../../services/whatsappService';
+import { sendTicketEmailViaMailgun } from '../../services/mailgunService';
 
 interface PublicRegistrationPortalProps {
   isStandalonePublic?: boolean;
@@ -225,6 +226,37 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
     }
   };
 
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+  const handleOpenEmail = async () => {
+    if (!liveReg) return;
+    if (!liveReg.email) {
+      addToast('warning', 'Missing Email', 'No email address on file.');
+      return;
+    }
+    setIsSendingEmail(true);
+    addToast('info', 'Sending Email Pass...', `Dispatching QR pass to ${liveReg.email} via Mailgun...`);
+    try {
+      const res = await sendTicketEmailViaMailgun({
+        toEmail: liveReg.email,
+        attendeeName: liveReg.name,
+        ticketId: liveReg.ticketId || liveReg.id,
+        tier: liveReg.tier,
+        assignedGate: getGateForTier(liveReg.tier),
+        qrValue: liveReg.qrValue || `PINK-POLO-2026-${liveReg.ticketId || liveReg.id}`,
+      });
+      if (res.success) {
+        addToast('success', 'Email Pass Dispatched!', `Official pass sent to ${liveReg.email} from event@bf.simplelogicit.com`);
+      } else {
+        addToast('error', 'Email Dispatch Error', res.error || 'Failed to dispatch email pass.');
+      }
+    } catch (e: any) {
+      addToast('error', 'Email Exception', e?.message || 'Error communicating with Mailgun API.');
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
   const handleResetForm = () => {
     setFullName('');
     setEmail('');
@@ -383,6 +415,7 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                         className="text-xs sm:text-sm px-2.5 sm:px-3 py-3 sm:py-3.5 bg-stone-50/70 border border-stone-200 rounded-xl focus:outline-none focus:border-rose-500 text-stone-700 font-mono shrink-0"
                       >
                         <option value="+971">🇦🇪 UAE +971</option>
+                        <option value="+374">🇦🇲 Armenia +374</option>
                         <option value="+966">🇸🇦 KSA +966</option>
                         <option value="+974">🇶🇦 Qatar +974</option>
                         <option value="+965">🇰🇼 Kuwait +965</option>
@@ -955,7 +988,7 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                 <div className="bg-slate-50 rounded-xl p-3 my-2 border border-slate-200 shadow-2xs space-y-2 text-xs">
                   <div className="bg-white p-2 rounded-lg border border-slate-200 text-[11px] space-y-0.5">
                     <div>
-                      <span className="font-semibold text-slate-900">From:</span> Pink Polo 2026 Committee &lt;invitations@pinkpolo.ae&gt;
+                      <span className="font-semibold text-slate-900">From:</span> Pink Polo 2026 Committee &lt;event@bf.simplelogicit.com&gt;
                     </div>
                     <div>
                       <span className="font-semibold text-slate-900">To:</span> {liveReg.email}
@@ -1002,11 +1035,12 @@ export const PublicRegistrationPortal: React.FC<PublicRegistrationPortalProps> =
                         <div className="pt-1">
                           <button
                             type="button"
-                            onClick={() => openEmailConfirmation(liveReg)}
-                            className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] rounded-lg shadow-2xs transition-colors cursor-pointer"
+                            disabled={isSendingEmail}
+                            onClick={handleOpenEmail}
+                            className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] rounded-lg shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
                           >
                             <Mail className="w-3 h-3 text-rose-300" />
-                            <span>Send Real Email via Gmail</span>
+                            <span>{isSendingEmail ? 'Dispatching...' : 'Dispatch to Attendee Email (Mailgun)'}</span>
                           </button>
                         </div>
                       </>

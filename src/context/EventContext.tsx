@@ -504,9 +504,9 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     logActivityToFirestore(approvalAct);
     logActivityToFirestore(ticketAct);
 
-    addToast('success', 'Registration approved & ticket generated', `Ticket ID: ${ticketId} issued for ${reg.name}`);
+    addToast('success', 'Registration Approved & Ticket Issued', `Ticket ID: ${ticketId} issued for ${reg.name}`);
 
-    // Automatically Dispatch WhatsApp Official E-Pass with attached QR
+    // In a single click: Automatically dispatch BOTH WhatsApp Pass and Mailgun Pass
     if (updatedReg.whatsapp) {
       sendWhatsAppTicketPass({
         toPhone: updatedReg.whatsapp,
@@ -517,14 +517,21 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         qrValue: updatedReg.qrValue || `PINK-POLO-2026-${updatedReg.ticketId}`,
       }).then((res) => {
         if (res.success) {
-          addToast('success', 'WhatsApp Pass Dispatched', `QR admission pass sent to ${updatedReg.whatsapp}`);
+          addToast('success', 'WhatsApp Pass Dispatched!', `Official QR ticket pass sent to ${updatedReg.whatsapp}`);
+        } else if (res.whatsappUrl) {
+          // Open WhatsApp web/app directly as automatic backup
+          window.open(res.whatsappUrl, '_blank');
+          addToast('info', 'WhatsApp Pass Opened', `Launched WhatsApp chat for ${updatedReg.whatsapp}`);
         } else {
-          console.log('[WhatsApp Dispatch Info]', res.error);
+          console.warn('[WhatsApp Dispatch Error]', res.error);
+          addToast('warning', 'WhatsApp Delivery Notice', res.error || 'WhatsApp message could not be delivered.');
         }
-      }).catch((e) => console.error('WhatsApp dispatch error:', e));
+      }).catch((e) => {
+        console.error('WhatsApp dispatch exception:', e);
+        addToast('error', 'WhatsApp Error', 'Network error sending WhatsApp pass.');
+      });
     }
 
-    // Automatically Dispatch Official HTML Pass via Mailgun API
     if (updatedReg.email) {
       sendTicketEmailViaMailgun({
         toEmail: updatedReg.email,
@@ -535,11 +542,15 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         qrValue: updatedReg.qrValue || `PINK-POLO-2026-${updatedReg.ticketId}`,
       }).then((res) => {
         if (res.success) {
-          addToast('success', 'Email Pass Sent via Mailgun', `Official pass delivered to ${updatedReg.email} from event@bf.simplelogicit.com`);
+          addToast('success', 'Email Pass Dispatched!', `Official pass sent to ${updatedReg.email} from event@bf.simplelogicit.com`);
         } else {
-          console.log('[Mailgun Dispatch Info]', res.error);
+          console.warn('[Mailgun Dispatch Error]', res.error);
+          addToast('warning', 'Email Delivery Notice', res.error || 'Email could not be delivered.');
         }
-      }).catch((e) => console.error('Email dispatch error:', e));
+      }).catch((e) => {
+        console.error('Mailgun dispatch exception:', e);
+        addToast('error', 'Email Error', 'Network error sending Mailgun email pass.');
+      });
     }
 
     // Sync to server API

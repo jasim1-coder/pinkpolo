@@ -62,18 +62,34 @@ export default async function handler(req, res) {
       },
     };
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
     const url = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
 
-    let metaRes = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(imagePayload),
-    });
+    let metaRes = null;
+    let metaData = {};
 
-    let metaData = await metaRes.json().catch(() => ({}));
+    try {
+      metaRes = await fetch(url, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(imagePayload),
+      });
+      clearTimeout(timeoutId);
+      metaData = await metaRes.json().catch(() => ({}));
+    } catch (networkErr) {
+      clearTimeout(timeoutId);
+      return res.status(200).json({
+        success: false,
+        error: 'Meta WhatsApp API direct connection timed out.',
+        whatsappUrl: `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(captionBody)}`,
+      });
+    }
 
     // If image fails, fallback to rich text with link
     if (!metaRes.ok) {
@@ -89,24 +105,33 @@ export default async function handler(req, res) {
         },
       };
 
-      metaRes = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(textPayload),
-      });
+      const retryController = new AbortController();
+      const retryTimeoutId = setTimeout(() => retryController.abort(), 6000);
 
-      metaData = await metaRes.json().catch(() => ({}));
+      try {
+        metaRes = await fetch(url, {
+          method: 'POST',
+          signal: retryController.signal,
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(textPayload),
+        });
+        clearTimeout(retryTimeoutId);
+        metaData = await metaRes.json().catch(() => ({}));
+      } catch {
+        clearTimeout(retryTimeoutId);
+      }
     }
 
-    if (!metaRes.ok) {
+    if (!metaRes || !metaRes.ok) {
       console.error('Meta WhatsApp Cloud API Error:', metaData);
-      return res.status(metaRes.status || 500).json({
+      return res.status(200).json({
         success: false,
         error: metaData?.error?.message || 'Failed to dispatch WhatsApp message',
         details: metaData,
+        whatsappUrl: `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(captionBody)}`,
       });
     }
 

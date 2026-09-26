@@ -20,6 +20,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { sendWhatsAppTicketPass, getGateForTier } from '../../services/whatsappService';
+import { sendTicketEmailViaMailgun } from '../../services/mailgunService';
 import ghantootLogo from '../../assets/images/ghantoot_polo_logo.png';
 import confetti from 'canvas-confetti';
 
@@ -88,6 +89,36 @@ export const RegistrationDetailModal: React.FC = () => {
       addToast('error', 'WhatsApp Exception', e?.message || 'Error communicating with WhatsApp API.');
     } finally {
       setIsSendingWhatsApp(false);
+    }
+  };
+
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+  const handleEmailShare = async () => {
+    if (!reg.email) {
+      addToast('warning', 'Missing Email', 'No email address on file for this attendee.');
+      return;
+    }
+    setIsSendingEmail(true);
+    addToast('info', 'Sending Email Pass...', `Dispatching pass to ${reg.email} via Mailgun...`);
+    try {
+      const res = await sendTicketEmailViaMailgun({
+        toEmail: reg.email,
+        attendeeName: reg.name,
+        ticketId: reg.ticketId || reg.id,
+        tier: reg.tier,
+        assignedGate: getGateForTier(reg.tier),
+        qrValue: reg.qrValue || `PINK-POLO-2026-${reg.ticketId || reg.id}`,
+      });
+      if (res.success) {
+        addToast('success', 'Email Pass Dispatched!', `Official pass sent to ${reg.email} from event@bf.simplelogicit.com`);
+      } else {
+        addToast('error', 'Email Dispatch Error', res.error || 'Failed to dispatch via Mailgun');
+      }
+    } catch (e: any) {
+      addToast('error', 'Email Exception', e?.message || 'Error communicating with Mailgun API.');
+    } finally {
+      setIsSendingEmail(false);
     }
   };
 
@@ -360,12 +391,13 @@ export const RegistrationDetailModal: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => openEmailConfirmation(reg)}
-                    className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
-                    title={`Send real confirmation email with QR pass to ${reg.email}`}
+                    disabled={isSendingEmail}
+                    onClick={handleEmailShare}
+                    className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                    title={`Send official confirmation email with QR pass to ${reg.email} via Mailgun`}
                   >
                     <Send className="w-3.5 h-3.5 text-rose-200" />
-                    <span>Send Real Email (Gmail)</span>
+                    <span>{isSendingEmail ? 'Sending...' : 'Send Pass via Email'}</span>
                   </button>
 
                   <button
